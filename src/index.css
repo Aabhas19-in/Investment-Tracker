@@ -1,17 +1,96 @@
 @import 'tailwindcss';
 
-@theme {
-  --color-ink: #0b1020;
-  --color-ink-soft: #151c33;
-  --color-line: #232c4a;
-  --color-mute: #8b96b8;
-  --color-accent: #6ee7b7;
-  --color-accent-deep: #0f766e;
-}
+/* ---------------------------------------------------------------- palette
+   Warm cream by day, aubergine by night — never flat grey. Every colour is a
+   token so the whole app switches theme without a single `dark:` class. */
 
 :root {
-  color-scheme: dark;
+  --bg: #fbf7f2;
+  --bg-glow-a: #ffd9a8;
+  --bg-glow-b: #cdd4ff;
+  --surface: #ffffff;
+  --surface-2: #f6f0e8;
+  --ink: #1c1714;
+  --ink-2: #574c43;
+  --muted: #8d8177;
+  --line: #ebe2d7;
+  --brand: #5b4bea;
+  --brand-soft: #ede9ff;
+  --on-brand: #ffffff;
+  --pos: #0e9f6e;
+  --neg: #e0405e;
+  --shadow-sm: 0 1px 2px rgb(28 23 20 / 0.05);
+  --shadow-md: 0 2px 4px rgb(28 23 20 / 0.04), 0 12px 28px -14px rgb(28 23 20 / 0.22);
+  --shadow-lg: 0 8px 40px -12px rgb(91 75 234 / 0.45);
 }
+
+:root:not([data-theme='light']) {
+  @media (prefers-color-scheme: dark) {
+    --bg: #141220;
+    --bg-glow-a: #4a2d6b;
+    --bg-glow-b: #1d3a6b;
+    --surface: #1e1b2e;
+    --surface-2: #272338;
+    --ink: #f6f3ff;
+    --ink-2: #cdc5e4;
+    --muted: #9b92b5;
+    --line: #322c46;
+    --brand: #9d8bff;
+    --brand-soft: #2a2545;
+    --on-brand: #14121f;
+    --pos: #34d399;
+    --neg: #fb7185;
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
+    --shadow-md: 0 2px 4px rgb(0 0 0 / 0.2), 0 12px 28px -14px rgb(0 0 0 / 0.6);
+    --shadow-lg: 0 8px 40px -12px rgb(157 139 255 / 0.5);
+  }
+}
+
+:root[data-theme='dark'] {
+  --bg: #141220;
+  --bg-glow-a: #4a2d6b;
+  --bg-glow-b: #1d3a6b;
+  --surface: #1e1b2e;
+  --surface-2: #272338;
+  --ink: #f6f3ff;
+  --ink-2: #cdc5e4;
+  --muted: #9b92b5;
+  --line: #322c46;
+  --brand: #9d8bff;
+  --brand-soft: #2a2545;
+  --on-brand: #14121f;
+  --pos: #34d399;
+  --neg: #fb7185;
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-md: 0 2px 4px rgb(0 0 0 / 0.2), 0 12px 28px -14px rgb(0 0 0 / 0.6);
+  --shadow-lg: 0 8px 40px -12px rgb(157 139 255 / 0.5);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink2: var(--ink-2);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-brandsoft: var(--brand-soft);
+  --color-onbrand: var(--on-brand);
+  --color-pos: var(--pos);
+  --color-neg: var(--neg);
+
+  --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --radius-card: 1.25rem;
+  --radius-pill: 999px;
+
+  --shadow-soft: var(--shadow-sm);
+  --shadow-card: var(--shadow-md);
+  --shadow-glow: var(--shadow-lg);
+}
+
+/* ------------------------------------------------------------------ base */
 
 html,
 body,
@@ -21,36 +100,83 @@ body,
 
 body {
   margin: 0;
-  background: var(--color-ink);
-  color: #eef2ff;
-  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
-  /* Stop iOS bouncing the whole page when a sheet is open. */
+  text-rendering: optimizeLegibility;
   overscroll-behavior-y: none;
 }
 
-/* Keep the on-screen keyboard from zooming the viewport on iOS. */
+/* A soft wash of colour behind everything, so no screen is ever a flat slab. */
+#root::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background:
+    radial-gradient(60rem 30rem at 12% -8%, color-mix(in srgb, var(--bg-glow-a) 55%, transparent), transparent 70%),
+    radial-gradient(48rem 28rem at 92% 4%, color-mix(in srgb, var(--bg-glow-b) 45%, transparent), transparent 70%);
+}
+
 input,
 select,
 textarea,
 button {
-  font-size: 16px;
+  font-size: 16px; /* stops iOS zooming the viewport on focus */
   font-family: inherit;
+  color: inherit;
 }
 
-/* Thin scrollbars for the horizontally scrolling data table. */
+::selection {
+  background: color-mix(in srgb, var(--brand) 25%, transparent);
+}
+
+/* Bigger, friendlier tap targets everywhere on touch devices. */
+@media (pointer: coarse) {
+  button,
+  a[role='button'],
+  select {
+    touch-action: manipulation;
+  }
+}
+
+/* -------------------------------------------------------------- utilities */
+
 .scroll-x {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
+  scrollbar-width: none;
 }
 .scroll-x::-webkit-scrollbar {
-  height: 6px;
+  display: none;
 }
-.scroll-x::-webkit-scrollbar-thumb {
-  background: var(--color-line);
-  border-radius: 999px;
+
+.no-scrollbar {
+  scrollbar-width: none;
 }
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/** Tinted chip that takes its hue from an --accent set inline. */
+.accent-chip {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: color-mix(in srgb, var(--accent) 78%, var(--ink));
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+.press {
+  transition:
+    transform 0.12s ease,
+    filter 0.12s ease;
+}
+.press:active {
+  transform: scale(0.97);
+}
+
+/* ------------------------------------------------------------- animations */
 
 @keyframes slide-up {
   from {
@@ -60,6 +186,40 @@ button {
     transform: translateY(0);
   }
 }
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .animate-sheet {
-  animation: slide-up 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+  animation: slide-up 0.26s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.animate-fade {
+  animation: fade-in 0.2s ease;
+}
+.animate-rise {
+  animation: rise 0.32s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

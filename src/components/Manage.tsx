@@ -1,18 +1,18 @@
 import { useEffect, useState } from 'react';
 import type { ColumnSpec } from '../types';
 import { COLUMN_TYPES, columnTypeDef, type ColumnType } from '../lib/columnTypes';
+import { accentFor } from '../lib/accent';
 import { Banner, Button, Field, Sheet, inputClass } from './UI';
+import { IconPlus, IconTrash } from './Icons';
 
 const col = (name: string, type: ColumnType): ColumnSpec => ({ name, type });
 
-/**
- * Starter column sets. They are only suggestions — every one is editable
- * before you create the tab, and columns can be added or removed later.
- */
-export const TEMPLATES: { name: string; columns: ColumnSpec[] }[] = [
-  { name: 'Blank', columns: [col('Date', 'date'), col('Notes', 'text')] },
+/** Emoji per template — the picker should look inviting, not like a dropdown. */
+export const TEMPLATES: { name: string; emoji: string; columns: ColumnSpec[] }[] = [
+  { name: 'Blank', emoji: '📄', columns: [col('Date', 'date'), col('Notes', 'text')] },
   {
     name: 'Gold',
+    emoji: '🪙',
     columns: [
       col('Date', 'date'),
       col('Form', 'text'),
@@ -26,6 +26,7 @@ export const TEMPLATES: { name: string; columns: ColumnSpec[] }[] = [
   },
   {
     name: 'Stocks',
+    emoji: '📈',
     columns: [
       col('Date', 'date'),
       col('Stock', 'text'),
@@ -39,6 +40,7 @@ export const TEMPLATES: { name: string; columns: ColumnSpec[] }[] = [
   },
   {
     name: 'Mutual funds',
+    emoji: '🧺',
     columns: [
       col('Date', 'date'),
       col('Fund name', 'text'),
@@ -52,6 +54,7 @@ export const TEMPLATES: { name: string; columns: ColumnSpec[] }[] = [
   },
   {
     name: 'Fixed deposit',
+    emoji: '🏦',
     columns: [
       col('Start date', 'date'),
       col('Bank', 'text'),
@@ -64,6 +67,7 @@ export const TEMPLATES: { name: string; columns: ColumnSpec[] }[] = [
   },
   {
     name: 'Crypto',
+    emoji: '🪐',
     columns: [
       col('Date', 'date'),
       col('Coin', 'text'),
@@ -76,6 +80,38 @@ export const TEMPLATES: { name: string; columns: ColumnSpec[] }[] = [
   },
 ];
 
+/** Type picker as chips — one tap, and you can see every option at once. */
+function TypePicker({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: ColumnType;
+  onChange: (t: ColumnType) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {COLUMN_TYPES.map((t) => {
+        const on = t.id === value;
+        return (
+          <button
+            key={t.id}
+            disabled={disabled}
+            onClick={() => onChange(t.id)}
+            className={`press rounded-xl border px-3 py-2 text-xs font-bold disabled:opacity-50 ${
+              on ? 'border-brand bg-brandsoft text-brand' : 'border-line text-muted'
+            }`}
+          >
+            {t.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Compact version for dense rows where chips would wrap badly. */
 function TypeSelect({
   value,
   onChange,
@@ -87,7 +123,7 @@ function TypeSelect({
 }) {
   return (
     <select
-      className={`${inputClass} py-2.5`}
+      className={`${inputClass} px-3 py-3 text-sm font-bold`}
       value={value}
       disabled={disabled}
       onChange={(e) => onChange(e.target.value as ColumnType)}
@@ -101,7 +137,7 @@ function TypeSelect({
   );
 }
 
-/** Name + type, the pair every "add a column" flow now asks for up front. */
+/** Name + type, the pair every "add a column" flow asks for up front. */
 function NewColumnFields({
   name,
   type,
@@ -116,7 +152,7 @@ function NewColumnFields({
   onSubmit: () => void;
 }) {
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <input
         className={inputClass}
         value={name}
@@ -129,8 +165,8 @@ function NewColumnFields({
           }
         }}
       />
-      <TypeSelect value={type} onChange={onType} />
-      <p className="text-xs text-[var(--color-mute)]">{columnTypeDef(type).blurb}</p>
+      <TypePicker value={type} onChange={onType} />
+      <p className="text-xs font-medium text-muted">{columnTypeDef(type).blurb}</p>
     </div>
   );
 }
@@ -147,6 +183,7 @@ export function NewSheetDialog({
   onCreate: (title: string, columns: ColumnSpec[]) => Promise<void>;
 }) {
   const [title, setTitle] = useState('');
+  const [picked, setPicked] = useState('Blank');
   const [columns, setColumns] = useState<ColumnSpec[]>(TEMPLATES[0].columns);
   const [draftName, setDraftName] = useState('');
   const [draftType, setDraftType] = useState<ColumnType>('currency');
@@ -156,6 +193,7 @@ export function NewSheetDialog({
   useEffect(() => {
     if (!open) return;
     setTitle('');
+    setPicked('Blank');
     setColumns(TEMPLATES[0].columns);
     setDraftName('');
     setDraftType('currency');
@@ -190,73 +228,79 @@ export function NewSheetDialog({
     }
   };
 
+  const accent = accentFor(title || picked);
+
   return (
     <Sheet open={open} title="New sheet" onClose={onClose}>
-      <div className="space-y-5">
-        <Field label="Sheet name" hint="This becomes a tab in your Google Sheet, e.g. Gold">
+      <div className="space-y-6">
+        <div>
+          <span className="mb-2.5 block text-[0.7rem] font-extrabold tracking-widest text-muted uppercase">
+            What are you tracking?
+          </span>
+          <div className="grid grid-cols-3 gap-2.5">
+            {TEMPLATES.map((t) => {
+              const on = picked === t.name;
+              return (
+                <button
+                  key={t.name}
+                  onClick={() => {
+                    setPicked(t.name);
+                    setColumns(t.columns);
+                    if (!title.trim() && t.name !== 'Blank') setTitle(t.name);
+                  }}
+                  className={`press flex flex-col items-center gap-1.5 rounded-2xl border-2 px-2 py-3.5 text-[0.7rem] font-bold transition ${
+                    on ? 'border-brand bg-brandsoft text-brand' : 'border-line text-muted'
+                  }`}
+                >
+                  <span className="text-2xl">{t.emoji}</span>
+                  {t.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <Field label="Sheet name" hint="This becomes a tab in your Google Sheet.">
           <input
             className={inputClass}
             value={title}
-            autoFocus
             placeholder="Gold"
             onChange={(e) => setTitle(e.target.value)}
           />
         </Field>
 
         <div>
-          <span className="mb-2 block text-xs font-medium tracking-wide text-[var(--color-mute)] uppercase">
-            Start from
-          </span>
-          <div className="scroll-x -mx-1 flex gap-2 px-1 pb-1">
-            {TEMPLATES.map((t) => (
-              <button
-                key={t.name}
-                onClick={() => {
-                  setColumns(t.columns);
-                  if (!title.trim() && t.name !== 'Blank') setTitle(t.name);
-                }}
-                className="shrink-0 rounded-full border border-[var(--color-line)] bg-[var(--color-ink-soft)] px-3.5 py-2 text-sm text-slate-200 active:bg-[var(--color-line)]"
-              >
-                {t.name}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <span className="mb-2 block text-xs font-medium tracking-wide text-[var(--color-mute)] uppercase">
+          <span className="mb-2.5 block text-[0.7rem] font-extrabold tracking-widest text-muted uppercase">
             Columns ({columns.length})
           </span>
           <ul className="space-y-2">
             {columns.map((c, i) => (
               <li key={`${c.name}-${i}`} className="flex items-center gap-2">
                 <input
-                  className={`${inputClass} py-2.5`}
+                  className={`${inputClass} py-3`}
                   value={c.name}
                   onChange={(e) =>
                     setColumns(columns.map((x, j) => (i === j ? { ...x, name: e.target.value } : x)))
                   }
                 />
-                <div className="w-32 shrink-0">
+                <div className="w-28 shrink-0">
                   <TypeSelect
                     value={c.type}
-                    onChange={(type) =>
-                      setColumns(columns.map((x, j) => (i === j ? { ...x, type } : x)))
-                    }
+                    onChange={(type) => setColumns(columns.map((x, j) => (i === j ? { ...x, type } : x)))}
                   />
                 </div>
                 <button
                   onClick={() => setColumns(columns.filter((_, j) => j !== i))}
                   aria-label={`Remove ${c.name}`}
-                  className="flex size-9 shrink-0 items-center justify-center rounded-lg text-[var(--color-mute)] active:bg-[var(--color-ink-soft)]"
+                  className="press grid size-11 shrink-0 place-items-center rounded-xl bg-surface2 text-muted"
                 >
-                  ×
+                  <IconTrash className="size-4" />
                 </button>
               </li>
             ))}
           </ul>
 
-          <div className="mt-4 rounded-xl border border-[var(--color-line)] p-3">
+          <div className="mt-4 rounded-2xl border border-dashed border-line p-4">
             <NewColumnFields
               name={draftName}
               type={draftType}
@@ -264,8 +308,8 @@ export function NewSheetDialog({
               onType={setDraftType}
               onSubmit={addDraft}
             />
-            <div className="mt-2">
-              <Button full variant="ghost" onClick={addDraft}>
+            <div className="mt-3">
+              <Button full variant="soft" icon={<IconPlus />} onClick={addDraft}>
                 Add column
               </Button>
             </div>
@@ -274,9 +318,14 @@ export function NewSheetDialog({
 
         {error && <Banner kind="error">{error}</Banner>}
 
-        <Button full disabled={busy} onClick={submit}>
+        <button
+          onClick={submit}
+          disabled={busy}
+          style={{ background: accent }}
+          className="press min-h-13 w-full rounded-2xl text-[0.95rem] font-extrabold text-white shadow-card disabled:opacity-40"
+        >
           {busy ? 'Creating…' : 'Create sheet'}
-        </Button>
+        </button>
       </div>
     </Sheet>
   );
@@ -344,18 +393,18 @@ export function ColumnManager({
 
   return (
     <Sheet open={open} title={`Columns in ${sheetTitle}`} onClose={onClose}>
-      <div className="space-y-4">
-        <p className="text-sm text-[var(--color-mute)]">
-          A column’s type is stored as its number format in Google Sheets. Only{' '}
-          <span className="text-slate-200">Money</span> and{' '}
-          <span className="text-slate-200">Number</span> columns appear in the totals row.
+      <div className="space-y-5">
+        <p className="rounded-2xl bg-surface2 px-4 py-3 text-xs leading-relaxed text-ink2">
+          A column’s type is saved as its number format in Google Sheets. Only{' '}
+          <span className="font-bold">Money</span> and <span className="font-bold">Number</span>{' '}
+          columns get totalled.
         </p>
 
         <ul className="space-y-2">
           {headers.map((h, i) => (
             <li key={i} className="flex items-center gap-2">
               <input
-                className={`${inputClass} py-2.5`}
+                className={`${inputClass} py-3`}
                 value={edits[i] ?? h}
                 onChange={(e) => setEdits({ ...edits, [i]: e.target.value })}
                 onBlur={() => {
@@ -363,7 +412,7 @@ export function ColumnManager({
                   if (next && next !== h) run(() => onRename(i, next));
                 }}
               />
-              <div className="w-32 shrink-0">
+              <div className="w-28 shrink-0">
                 <TypeSelect
                   value={columnTypes[i] ?? 'text'}
                   disabled={busy}
@@ -378,17 +427,17 @@ export function ColumnManager({
                 <button
                   onClick={() => setPendingDelete(i)}
                   aria-label={`Delete ${h}`}
-                  className="flex size-9 shrink-0 items-center justify-center rounded-lg text-[var(--color-mute)] active:bg-[var(--color-ink-soft)]"
+                  className="press grid size-11 shrink-0 place-items-center rounded-xl bg-surface2 text-muted"
                 >
-                  ×
+                  <IconTrash className="size-4" />
                 </button>
               )}
             </li>
           ))}
         </ul>
 
-        <div className="border-t border-[var(--color-line)] pt-4">
-          <Field label="Add a column" hint="Pick the type first — it decides formatting and totals.">
+        <div className="rounded-2xl border border-dashed border-line p-4">
+          <Field label="Add a column" hint="Pick the type first — it sets the formatting and totals.">
             <NewColumnFields
               name={draftName}
               type={draftType}
@@ -397,8 +446,8 @@ export function ColumnManager({
               onSubmit={add}
             />
           </Field>
-          <div className="mt-2">
-            <Button full disabled={busy || !draftName.trim()} onClick={add}>
+          <div className="mt-3">
+            <Button full icon={<IconPlus />} disabled={busy || !draftName.trim()} onClick={add}>
               {busy ? 'Working…' : 'Add column'}
             </Button>
           </div>
@@ -406,7 +455,7 @@ export function ColumnManager({
 
         {error && <Banner kind="error">{error}</Banner>}
 
-        <p className="text-xs text-[var(--color-mute)]">
+        <p className="px-1 text-xs leading-relaxed text-muted">
           Deleting a column removes that data from every row of this sheet, and cannot be undone from
           here.
         </p>

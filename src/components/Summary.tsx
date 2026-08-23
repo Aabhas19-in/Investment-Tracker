@@ -3,8 +3,10 @@ import type { SheetMeta } from '../types';
 import { readSheet, type SheetsCtx } from '../lib/sheets';
 import { makeFormatters, parseNumeric, type CurrencyCode } from '../lib/format';
 import { columnTypeDef } from '../lib/columnTypes';
+import { accentFor, initials } from '../lib/accent';
 import { absoluteReturn } from '../lib/finance';
-import { Banner, Button, Empty, Spinner } from './UI';
+import { Badge, Banner, Button, Empty, Spinner } from './UI';
+import { IconArrowDown, IconArrowUp, IconRefresh } from './Icons';
 
 interface SheetSummary {
   title: string;
@@ -93,73 +95,89 @@ export function Summary({
   const portfolioInvested = rows?.reduce((s, r) => s + (r.invested ?? 0), 0) ?? 0;
   const portfolioValue = rows?.reduce((s, r) => s + (r.currentValue ?? 0), 0) ?? 0;
   const hasPortfolio = portfolioInvested > 0 && portfolioValue > 0;
+  const up = portfolioValue >= portfolioInvested;
 
   if (loading && !rows) return <Spinner label="Adding up your sheets…" />;
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-4 pb-28">
+    <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28">
       {error && <Banner kind="error">{error}</Banner>}
 
       {rows?.length === 0 && (
-        <Empty title="Nothing to summarise" body="Create a sheet and add a few entries first." />
+        <Empty emoji="📭" title="Nothing to summarise" body="Create a sheet and add a few entries first." />
       )}
 
       {hasPortfolio && (
-        <div className="mb-5 rounded-2xl border border-emerald-400/25 bg-emerald-400/10 p-5">
-          <p className="text-xs font-medium tracking-wide text-emerald-300/80 uppercase">
-            Across all sheets
+        <div
+          className="animate-rise relative overflow-hidden rounded-[1.75rem] p-6 text-white shadow-card"
+          style={{
+            background: up
+              ? 'linear-gradient(135deg,#4f46e5 0%,#7c3aed 52%,#a855f7 100%)'
+              : 'linear-gradient(135deg,#be123c 0%,#e11d48 55%,#f43f5e 100%)',
+          }}
+        >
+          {/* Soft highlight so the card has depth rather than being a flat fill. */}
+          <div className="pointer-events-none absolute -top-16 -right-10 size-52 rounded-full bg-white/12 blur-2xl" />
+          <p className="text-[0.7rem] font-bold tracking-widest text-white/70 uppercase">
+            Total portfolio value
           </p>
-          <p className="mt-2 text-3xl font-bold tabular-nums">{fmt.money(portfolioValue)}</p>
-          <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm">
-            <span className="text-[var(--color-mute)]">
-              Invested <span className="text-slate-200">{fmt.money(portfolioInvested)}</span>
+          <p className="mt-2 text-[2.6rem] leading-none font-extrabold tracking-tight tabular-nums">
+            {fmt.money(portfolioValue)}
+          </p>
+          <div className="mt-5 flex flex-wrap items-center gap-2.5">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-sm font-bold tabular-nums backdrop-blur-sm">
+              {up ? <IconArrowUp className="size-4" /> : <IconArrowDown className="size-4" />}
+              {fmt.money(Math.abs(portfolioValue - portfolioInvested))}
             </span>
-            <span
-              className={portfolioValue >= portfolioInvested ? 'text-emerald-300' : 'text-rose-300'}
-            >
-              {portfolioValue >= portfolioInvested ? '▲' : '▼'}{' '}
-              {fmt.money(Math.abs(portfolioValue - portfolioInvested))} (
-              {fmt.pct(absoluteReturn(portfolioInvested, portfolioValue))})
+            <span className="rounded-full bg-white/20 px-3 py-1.5 text-sm font-bold tabular-nums backdrop-blur-sm">
+              {fmt.pct(absoluteReturn(portfolioInvested, portfolioValue))}
+            </span>
+            <span className="text-sm font-semibold text-white/75">
+              on {fmt.money(portfolioInvested)} invested
             </span>
           </div>
         </div>
       )}
 
-      <div className="space-y-3">
-        {rows?.map((r) => {
+      <div className="mt-4 space-y-3">
+        {rows?.map((r, n) => {
+          const color = accentFor(r.title);
           const showsReturn = r.invested != null && r.currentValue != null && r.invested > 0;
+          const gained = showsReturn && r.currentValue! >= r.invested!;
           return (
             <div
               key={r.title}
-              className="rounded-2xl border border-[var(--color-line)] bg-[var(--color-ink-soft)] p-4"
+              style={{ animationDelay: `${Math.min(n, 8) * 30}ms` }}
+              className="animate-rise rounded-card bg-surface p-4 shadow-card"
             >
-              <div className="flex items-baseline justify-between">
-                <h3 className="font-semibold">{r.title}</h3>
-                <span className="text-xs text-[var(--color-mute)]">
-                  {r.entries} {r.entries === 1 ? 'entry' : 'entries'}
-                </span>
+              <div className="flex items-center gap-3">
+                <Badge text={initials(r.title)} color={color} />
+                <div className="min-w-0 flex-1">
+                  <h3 className="truncate font-extrabold tracking-tight">{r.title}</h3>
+                  <p className="text-xs font-semibold text-muted">
+                    {r.entries} {r.entries === 1 ? 'entry' : 'entries'}
+                  </p>
+                </div>
+                {showsReturn && (
+                  <div className="text-right">
+                    <p className="font-extrabold tabular-nums">{fmt.money(r.currentValue!)}</p>
+                    <p
+                      className={`text-xs font-bold tabular-nums ${gained ? 'text-pos' : 'text-neg'}`}
+                    >
+                      {gained ? '▲' : '▼'} {fmt.pct(absoluteReturn(r.invested!, r.currentValue!))}
+                    </p>
+                  </div>
+                )}
               </div>
 
-              {showsReturn && (
-                <p
-                  className={`mt-1 text-sm ${
-                    r.currentValue! >= r.invested! ? 'text-emerald-300' : 'text-rose-300'
-                  }`}
-                >
-                  {fmt.money(r.currentValue!)} · {fmt.pct(absoluteReturn(r.invested!, r.currentValue!))}
-                </p>
-              )}
-
-              {r.totals.length === 0 ? (
-                <p className="mt-3 text-sm text-[var(--color-mute)]">
-                  No Money or Number columns to total.
-                </p>
-              ) : (
-                <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2">
+              {r.totals.length > 0 && (
+                <dl className="mt-3.5 grid grid-cols-2 gap-x-3 gap-y-2.5 border-t border-line pt-3.5">
                   {r.totals.map((t) => (
                     <div key={t.header} className="min-w-0">
-                      <dt className="truncate text-xs text-[var(--color-mute)]">{t.header}</dt>
-                      <dd className="tabular-nums">
+                      <dt className="truncate text-[0.66rem] font-bold tracking-wider text-muted uppercase">
+                        {t.header}
+                      </dt>
+                      <dd className="truncate text-sm font-bold tabular-nums">
                         {t.total.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                       </dd>
                     </div>
@@ -171,17 +189,19 @@ export function Summary({
         })}
       </div>
 
-      <div className="mt-5">
-        <Button full variant="ghost" onClick={() => void load()} disabled={loading}>
-          {loading ? 'Refreshing…' : 'Refresh from sheet'}
-        </Button>
-      </div>
+      {rows && rows.length > 0 && (
+        <div className="mt-5">
+          <Button full variant="ghost" icon={<IconRefresh />} onClick={() => void load()} disabled={loading}>
+            {loading ? 'Refreshing…' : 'Refresh from sheet'}
+          </Button>
+        </div>
+      )}
 
-      <p className="mt-4 text-xs leading-relaxed text-[var(--color-mute)]">
-        Only columns you set to <span className="text-slate-300">Money</span> or{' '}
-        <span className="text-slate-300">Number</span> are totalled — set a column’s type under
-        Sheets → ⋯ → Manage columns. The portfolio card appears when a sheet has both an “invested”
-        and a “current value” style column.
+      <p className="mt-5 px-1 text-xs leading-relaxed text-muted">
+        Only columns you set to <span className="font-bold text-ink2">Money</span> or{' '}
+        <span className="font-bold text-ink2">Number</span> are totalled — change a column’s type
+        under Sheets → ⋯ → Manage columns. The big card appears once a sheet has both an “invested”
+        and a “current value” column.
       </p>
     </div>
   );

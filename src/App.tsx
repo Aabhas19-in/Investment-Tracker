@@ -1,20 +1,36 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { SheetData, SheetMeta, Tab } from './types';
 import { useConfig } from './lib/config';
 import { isSignedIn, onAuthChange, signIn } from './lib/googleAuth';
 import * as api from './lib/sheets';
 import { Banner, Button } from './components/UI';
+import { IconCalculator, IconChart, IconGear, IconSparkle, IconWallet } from './components/Icons';
 import { DataView, type DataActions } from './components/DataView';
 import { Summary } from './components/Summary';
 import { Calculators } from './components/Calculators';
 import { Settings } from './components/Settings';
 
-const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: 'data', label: 'Sheets', icon: '▦' },
-  { id: 'summary', label: 'Summary', icon: '◑' },
-  { id: 'calc', label: 'Calculate', icon: 'ƒ' },
-  { id: 'settings', label: 'Settings', icon: '⚙' },
+const TABS: { id: Tab; label: string; icon: typeof IconWallet }[] = [
+  { id: 'data', label: 'Sheets', icon: IconWallet },
+  { id: 'summary', label: 'Summary', icon: IconChart },
+  { id: 'calc', label: 'Calculate', icon: IconCalculator },
+  { id: 'settings', label: 'Settings', icon: IconGear },
 ];
+
+const TITLES: Record<Tab, string> = {
+  data: 'Your investments',
+  summary: 'Where you stand',
+  calc: 'Run the numbers',
+  settings: 'Settings',
+};
+
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 5) return 'Up late';
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
 
 export default function App() {
   const [config, setConfig] = useConfig();
@@ -114,8 +130,7 @@ export default function App() {
         await api.addColumn(ctx, active, name, data?.headers.length ?? 0, type, config.currency);
         await loadSheets(active.title); // column count changed
       }),
-    renameColumn: (index, name) =>
-      mutate(() => api.renameColumn(ctx, active!.title, index, name)),
+    renameColumn: (index, name) => mutate(() => api.renameColumn(ctx, active!.title, index, name)),
     retypeColumn: (index, type) =>
       mutate(() => api.setColumnType(ctx, active!.sheetId, index, type, config.currency)),
     deleteColumn: (index) => mutate(() => api.deleteColumn(ctx, active!.sheetId, index)),
@@ -128,11 +143,19 @@ export default function App() {
     return (
       <Shell tab="settings" setTab={setTab} hideNav>
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="px-5 pt-8">
-            <h1 className="text-2xl font-bold">Let’s connect your spreadsheet</h1>
-            <p className="mt-2 text-sm text-[var(--color-mute)]">
-              This app has no server and no database. Everything lives in your own Google Sheet, so
-              it needs two things before it can start.
+          <div className="animate-rise px-5 pt-10">
+            <span className="inline-flex items-center gap-2 rounded-full bg-brandsoft px-3.5 py-1.5 text-xs font-bold text-brand">
+              <IconSparkle className="size-3.5" />
+              One-time setup
+            </span>
+            <h1 className="mt-4 text-3xl font-extrabold tracking-tight">
+              Let’s connect
+              <br />
+              your spreadsheet
+            </h1>
+            <p className="mt-3 text-sm leading-relaxed text-muted">
+              No server, no database. Everything lives in your own Google Sheet — this app just needs
+              to know which one.
             </p>
           </div>
           <Settings
@@ -149,47 +172,67 @@ export default function App() {
   if (!signedIn) {
     return (
       <Shell tab={tab} setTab={setTab} hideNav>
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-8 text-center">
-          <div className="mb-6 text-5xl">📈</div>
-          <h1 className="text-2xl font-bold">Investment Tracker</h1>
-          <p className="mt-3 max-w-sm text-sm leading-relaxed text-[var(--color-mute)]">
-            Sign in with the Google account that owns your spreadsheet. The app keeps no copy of your
-            data — it reads and writes your sheet directly, every time.
-          </p>
-          <div className="mt-8 w-full max-w-xs">
-            <Button
-              full
-              onClick={async () => {
-                setError(null);
-                try {
-                  await signIn(config.clientId);
-                } catch (e) {
-                  fail(e);
-                }
-              }}
-            >
-              Sign in with Google
-            </Button>
-            <div className="mt-3">
+        <div className="flex min-h-0 flex-1 flex-col justify-center overflow-y-auto px-7 py-10">
+          <div className="animate-rise mx-auto w-full max-w-sm text-center">
+            <div className="mx-auto grid size-24 place-items-center rounded-[2rem] bg-surface text-5xl shadow-card">
+              🪴
+            </div>
+            <h1 className="mt-7 text-3xl font-extrabold tracking-tight">Investment Tracker</h1>
+            <p className="mt-3 text-sm leading-relaxed text-muted">
+              Your money, in your own spreadsheet. Nothing is stored here — every number is read
+              fresh from your sheet, every time.
+            </p>
+
+            <div className="mt-9 space-y-3">
+              <Button
+                full
+                onClick={async () => {
+                  setError(null);
+                  try {
+                    await signIn(config.clientId);
+                  } catch (e) {
+                    fail(e);
+                  }
+                }}
+              >
+                Sign in with Google
+              </Button>
               <Button full variant="ghost" onClick={() => setTab('settings')}>
                 Change spreadsheet
               </Button>
             </div>
+
+            {error && (
+              <div className="mt-6 text-left">
+                <Banner kind="error">{error}</Banner>
+              </div>
+            )}
           </div>
-          {error && (
-            <div className="mt-6 w-full max-w-sm text-left">
-              <Banner kind="error">{error}</Banner>
-            </div>
-          )}
         </div>
       </Shell>
     );
   }
 
   return (
-    <Shell tab={tab} setTab={setTab}>
+    <Shell
+      tab={tab}
+      setTab={setTab}
+      header={
+        <div className="flex items-end justify-between gap-3 px-4 pt-3 pb-1">
+          <div className="min-w-0">
+            {tab === 'data' && (
+              <p className="text-xs font-bold tracking-wide text-muted">{greeting()},</p>
+            )}
+            <h1 className="truncate text-2xl font-extrabold tracking-tight">{TITLES[tab]}</h1>
+          </div>
+          {loading && (
+            <span className="mb-1.5 size-4 shrink-0 animate-spin rounded-full border-2 border-line border-t-brand" />
+          )}
+        </div>
+      }
+    >
       {error && (
-        <div className="px-4 pt-3">
+        <div className="px-4 pb-3">
           <Banner kind="error">{error}</Banner>
         </div>
       )}
@@ -216,49 +259,63 @@ export default function App() {
           onReload={() => void loadSheets()}
         />
       )}
-
-      {loading && data && (
-        <div className="pointer-events-none fixed inset-x-0 top-0 z-40">
-          <div className="h-0.5 animate-pulse bg-emerald-400" />
-        </div>
-      )}
     </Shell>
   );
 }
 
 function Shell({
   children,
+  header,
   tab,
   setTab,
   hideNav,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
+  header?: ReactNode;
   tab: Tab;
   setTab: (t: Tab) => void;
   hideNav?: boolean;
 }) {
   return (
     <div className="flex h-full flex-col">
-      {/* Children own their own scrolling so headers and tab strips can stay pinned. */}
+      {header && (
+        <div className="shrink-0" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+          {header}
+        </div>
+      )}
+
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</main>
+
       {!hideNav && (
         <nav
-          className="shrink-0 border-t border-[var(--color-line)] bg-[var(--color-ink)]"
+          className="shrink-0 border-t border-line bg-surface/85 backdrop-blur-xl"
           style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
         >
-          <div className="mx-auto grid max-w-lg grid-cols-4">
-            {TABS.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`flex flex-col items-center gap-1 py-3 text-xs font-medium transition ${
-                  tab === t.id ? 'text-emerald-300' : 'text-[var(--color-mute)]'
-                }`}
-              >
-                <span className="text-lg leading-none">{t.icon}</span>
-                {t.label}
-              </button>
-            ))}
+          <div className="mx-auto grid max-w-lg grid-cols-4 px-2 py-1.5">
+            {TABS.map((t) => {
+              const on = tab === t.id;
+              const Icon = t.icon;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setTab(t.id)}
+                  className="press flex flex-col items-center gap-1 rounded-2xl py-2"
+                >
+                  <span
+                    className={`grid h-8 w-14 place-items-center rounded-full transition-colors ${
+                      on ? 'bg-brandsoft text-brand' : 'text-muted'
+                    }`}
+                  >
+                    <Icon className="size-5" strokeWidth={on ? 2.3 : 1.9} />
+                  </span>
+                  <span
+                    className={`text-[0.68rem] font-bold ${on ? 'text-brand' : 'text-muted'}`}
+                  >
+                    {t.label}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </nav>
       )}

@@ -6,10 +6,13 @@ import type { CurrencyCode } from './format';
  * OAuth client to use, and a currency symbol. No investment data, no access
  * token, no cached rows — those live in the spreadsheet or in memory.
  */
+export type ThemePref = 'system' | 'light' | 'dark';
+
 export interface AppConfig {
   spreadsheetId: string;
   clientId: string;
   currency: CurrencyCode;
+  theme: ThemePref;
 }
 
 const KEY = 'investment-tracker/config';
@@ -18,6 +21,7 @@ const defaults: AppConfig = {
   spreadsheetId: import.meta.env.VITE_SPREADSHEET_ID ?? '',
   clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID ?? '',
   currency: 'INR',
+  theme: 'system',
 };
 
 function read(): AppConfig {
@@ -32,6 +36,14 @@ function read(): AppConfig {
 let current = read();
 const listeners = new Set<() => void>();
 
+/** `system` leaves the attribute off so the CSS media query decides. */
+function applyTheme(theme: ThemePref) {
+  const root = document.documentElement;
+  if (theme === 'system') root.removeAttribute('data-theme');
+  else root.setAttribute('data-theme', theme);
+}
+applyTheme(current.theme);
+
 function write(patch: Partial<AppConfig>) {
   current = { ...current, ...patch };
   try {
@@ -39,6 +51,7 @@ function write(patch: Partial<AppConfig>) {
   } catch {
     /* private browsing — settings just won't survive a reload */
   }
+  if (patch.theme) applyTheme(patch.theme);
   listeners.forEach((l) => l());
 }
 
