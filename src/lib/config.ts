@@ -1,0 +1,67 @@
+import { useCallback, useSyncExternalStore } from 'react';
+import type { CurrencyCode } from './format';
+
+/**
+ * The only thing this app persists locally: which spreadsheet to open, which
+ * OAuth client to use, and a currency symbol. No investment data, no access
+ * token, no cached rows — those live in the spreadsheet or in memory.
+ */
+export interface AppConfig {
+  spreadsheetId: string;
+  clientId: string;
+  currency: CurrencyCode;
+}
+
+const KEY = 'investment-tracker/config';
+
+const defaults: AppConfig = {
+  spreadsheetId: import.meta.env.VITE_SPREADSHEET_ID ?? '',
+  clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID ?? '',
+  currency: 'INR',
+};
+
+function read(): AppConfig {
+  try {
+    const raw = localStorage.getItem(KEY);
+    return raw ? { ...defaults, ...JSON.parse(raw) } : defaults;
+  } catch {
+    return defaults;
+  }
+}
+
+let current = read();
+const listeners = new Set<() => void>();
+
+function write(patch: Partial<AppConfig>) {
+  current = { ...current, ...patch };
+  try {
+    localStorage.setItem(KEY, JSON.stringify(current));
+  } catch {
+    /* private browsing — settings just won't survive a reload */
+  }
+  listeners.forEach((l) => l());
+}
+
+export function useConfig(): [AppConfig, (patch: Partial<AppConfig>) => void] {
+  const config = useSyncExternalStore(
+    (l) => {
+      listeners.add(l);
+      return () => listeners.delete(l);
+    },
+    () => current,
+    () => current,
+  );
+  return [config, useCallback(write, [])];
+}
+
+/** Accepts either a full Google Sheets URL or a bare id. */
+export function extractSpreadsheetId(input: string): string {
+  const match = input.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  return (match?.[1] ?? input).trim();
+}
+
+export const sheetUrl = (id: string, gid?: number) =>
+  `https://docs.google.com/spreadsheets/d/${id}/edit${gid != null ? `#gid=${gid}` : ''}`;
+
+export const xlsxDownloadUrl = (id: string) =>
+  `https://docs.google.com/spreadsheets/d/${id}/export?format=xlsx`;
