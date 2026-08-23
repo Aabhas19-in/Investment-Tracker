@@ -1,19 +1,29 @@
-# Investment Tracker
+# Investment & Expense Tracker
 
-A mobile-first React app that keeps **all** of your investment data in your own Google Sheet.
+A mobile-first React app that keeps **all** of your data in your own Google Sheets.
 No backend, no database, no server-side code — the browser talks to the Google Sheets API directly.
+Two separate workbooks: one for investments, one for expenses.
+
+**Investments**
 
 - Create a new sheet (tab) per asset — Gold, Stocks, Mutual Funds, anything — from the UI
-- Add, rename and delete columns per sheet, from the UI
+- Add, rename, retype and delete columns per sheet, from the UI
 - Add, edit and delete rows; values starting with `=` become live spreadsheet formulas
-- A Summary tab that totals every numeric column and detects invested vs current value
-- 11 built-in investing calculators (Future value, SIP, step-up SIP, goal planner, CAGR, XIRR,
-  SWP, inflation, post-tax return, doubling time, EMI)
-- Download the whole thing as a real `.xlsx` any time
+- Column types (Text / Money / Number / Percent / Date) stored as the sheet's own number format
+- A Summary tab that totals your Money and Number columns and spots invested vs current value
 
-**What the app stores:** three settings in `localStorage` — spreadsheet ID, OAuth client ID,
-currency. Nothing else. No rows, no totals, no access token. The Google token lives in a
-JavaScript variable and dies with the tab.
+**Expenses**
+
+- One tab per month (`Aug 2026`), created from a month picker
+- A mandatory Date column, pre-filled with today and freely back-datable
+- Your own categories, managed in a `Categories` tab and picked as tags when logging
+- Spend broken down by category as bubbles, with exact amounts and shares
+
+Both workbooks can be opened in Google Sheets or downloaded as a real `.xlsx` at any time.
+
+**What the app stores:** a handful of settings in `localStorage` — the two spreadsheet IDs, the
+OAuth client ID, the theme, and which totals you've dismissed. Nothing else. No rows, no totals,
+no access token. The Google token lives in a JavaScript variable and dies with the tab.
 
 ---
 
@@ -122,16 +132,16 @@ spreadsheet URL and client ID directly on first run.
 src/
   lib/googleAuth.ts   Google Identity Services token flow. Token in memory only.
   lib/sheets.ts       Sheets REST v4 wrapper: read, append, update, delete rows;
-                      add/rename/delete columns and tabs. Every call hits the API.
-  lib/finance.ts      Pure investing maths + a declarative catalog of calculators.
-  lib/format.ts       Currency formatting and "is this column numeric?" detection.
-  lib/config.ts       The three persisted settings.
-  components/         DataView (table + tabs), Manage (new sheet / columns),
-                      RowEditor, Summary, Calculators, Settings, UI primitives.
+                      add/rename/retype/delete columns and tabs. Every call hits the API.
+  lib/columnTypes.ts  Column types <-> Google Sheets number formats.
+  lib/expenses.ts     Month-tab naming, date parsing, category helpers.
+  lib/format.ts       Exact INR formatting and numeric parsing.
+  lib/accent.ts       A stable colour per sheet and per category.
+  lib/config.ts       The persisted settings.
+  components/         DataView + Manage + RowEditor (investments),
+                      ExpensesView + ExpenseEditor (expenses),
+                      Summary, Settings, Icons, UI primitives.
 ```
-
-Adding a calculator is one object appended to `CALCULATORS` in `src/lib/finance.ts` — the UI
-renders its fields and results automatically.
 
 ### Live formulas
 

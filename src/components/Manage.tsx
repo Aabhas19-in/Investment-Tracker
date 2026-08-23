@@ -337,6 +337,7 @@ export function ColumnManager({
   columnTypes,
   sheetTitle,
   lockedColumns = [],
+  tags,
   onClose,
   onAdd,
   onRename,
@@ -349,6 +350,8 @@ export function ColumnManager({
   sheetTitle: string;
   /** Column names that can't be renamed, retyped or deleted (e.g. Date on expenses). */
   lockedColumns?: string[];
+  /** Controls which totals appear as tags above the list. Omit to hide the switch. */
+  tags?: { hidden: string[]; onToggle: (header: string, visible: boolean) => void };
   onClose: () => void;
   onAdd: (name: string, type: ColumnType) => Promise<void>;
   onRename: (index: number, name: string) => Promise<void>;
@@ -400,49 +403,74 @@ export function ColumnManager({
         <p className="rounded-2xl bg-surface2 px-4 py-3 text-xs leading-relaxed text-ink2">
           A column’s type is saved as its number format in Google Sheets. Only{' '}
           <span className="font-bold">Money</span> and <span className="font-bold">Number</span>{' '}
-          columns get totalled.
+          columns can be totalled — switch a total on to show it as a tag above your entries.
         </p>
 
         <ul className="space-y-2">
           {headers.map((h, i) => {
             const locked = lockedColumns.some((l) => l.toLowerCase() === h.trim().toLowerCase());
+            const type = columnTypes[i] ?? 'text';
+            const canTag = Boolean(tags) && columnTypeDef(type).totals;
+            const tagged = canTag && !tags!.hidden.includes(h);
             return (
-              <li key={i} className="flex items-center gap-2">
-                <input
-                  className={`${inputClass} py-3 ${locked ? 'opacity-60' : ''}`}
-                  value={edits[i] ?? h}
-                  readOnly={locked}
-                  onChange={(e) => setEdits({ ...edits, [i]: e.target.value })}
-                  onBlur={() => {
-                    const next = (edits[i] ?? h).trim();
-                    if (next && next !== h) run(() => onRename(i, next));
-                  }}
-                />
-                <div className="w-28 shrink-0">
-                  <TypeSelect
-                    value={columnTypes[i] ?? 'text'}
-                    disabled={busy || locked}
-                    onChange={(type) => run(() => onRetype(i, type))}
+              <li key={i} className="space-y-2 rounded-2xl border border-line p-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    className={`${inputClass} py-3 ${locked ? 'opacity-60' : ''}`}
+                    value={edits[i] ?? h}
+                    readOnly={locked}
+                    onChange={(e) => setEdits({ ...edits, [i]: e.target.value })}
+                    onBlur={() => {
+                      const next = (edits[i] ?? h).trim();
+                      if (next && next !== h) run(() => onRename(i, next));
+                    }}
                   />
+                  <div className="w-28 shrink-0">
+                    <TypeSelect
+                      value={type}
+                      disabled={busy || locked}
+                      onChange={(next) => run(() => onRetype(i, next))}
+                    />
+                  </div>
+                  {locked ? (
+                    <span
+                      title={`${h} is required and can't be changed`}
+                      className="grid size-11 shrink-0 place-items-center rounded-xl bg-surface2 text-muted"
+                    >
+                      🔒
+                    </span>
+                  ) : pendingDelete === i ? (
+                    <Button variant="danger" disabled={busy} onClick={() => run(() => onDelete(i))}>
+                      Sure?
+                    </Button>
+                  ) : (
+                    <button
+                      onClick={() => setPendingDelete(i)}
+                      aria-label={`Delete ${h}`}
+                      className="press grid size-11 shrink-0 place-items-center rounded-xl bg-surface2 text-muted"
+                    >
+                      <IconTrash className="size-4" />
+                    </button>
+                  )}
                 </div>
-                {locked ? (
-                  <span
-                    title={`${h} is required and can't be changed`}
-                    className="grid size-11 shrink-0 place-items-center rounded-xl bg-surface2 text-muted"
-                  >
-                    🔒
-                  </span>
-                ) : pendingDelete === i ? (
-                  <Button variant="danger" disabled={busy} onClick={() => run(() => onDelete(i))}>
-                    Sure?
-                  </Button>
-                ) : (
+
+                {canTag && (
                   <button
-                    onClick={() => setPendingDelete(i)}
-                    aria-label={`Delete ${h}`}
-                    className="press grid size-11 shrink-0 place-items-center rounded-xl bg-surface2 text-muted"
+                    onClick={() => tags!.onToggle(h, !tagged)}
+                    className="flex w-full items-center justify-between gap-3 rounded-xl px-2 py-1.5 text-left"
                   >
-                    <IconTrash className="size-4" />
+                    <span className="text-xs font-bold text-muted">Show total as a tag</span>
+                    <span
+                      className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+                        tagged ? 'bg-brand' : 'bg-line'
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 size-5 rounded-full bg-white shadow-soft transition-all ${
+                          tagged ? 'left-[1.375rem]' : 'left-0.5'
+                        }`}
+                      />
+                    </span>
                   </button>
                 )}
               </li>

@@ -1,13 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { columnTypeDef, type ColumnType } from '../lib/columnTypes';
-import {
-  monthTitle,
-  parseMonthTitle,
-  parseSheetDate,
-  toISODate,
-  todayISO,
-} from '../lib/expenses';
+import { monthTitle, parseMonthTitle } from '../lib/expenses';
+import { parseSheetDate, toISODate, todayISO } from '../lib/dates';
 import { Banner, Button, Field, Sheet, inputClass } from './UI';
+import { DateField } from './DateField';
 import { IconTrash } from './Icons';
 
 function inputModeFor(type: ColumnType): 'decimal' | 'text' {
@@ -102,12 +98,6 @@ export function ExpenseEditor({
     }
   };
 
-  const shiftDate = (days: number) => {
-    const base = parseSheetDate(values[dateIndex] ?? '') ?? new Date();
-    base.setDate(base.getDate() + days);
-    setAt(dateIndex, toISODate(base));
-  };
-
   return (
     <Sheet open={open} title={editing ? 'Edit expense' : 'New expense'} onClose={onClose}>
       <div className="space-y-4">
@@ -117,40 +107,7 @@ export function ExpenseEditor({
           if (i === dateIndex) {
             return (
               <Field key={i} label={h || 'Date'}>
-                <input
-                  type="date"
-                  className={inputClass}
-                  value={values[i] ?? ''}
-                  onChange={(e) => setAt(i, e.target.value)}
-                />
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {[
-                    { label: 'Today', iso: todayISO() },
-                    { label: 'Yesterday', iso: (() => { const d = new Date(); d.setDate(d.getDate() - 1); return toISODate(d); })() },
-                  ].map((q) => (
-                    <button
-                      key={q.label}
-                      onClick={() => setAt(i, q.iso)}
-                      className={`press rounded-xl border px-3 py-2 text-xs font-bold ${
-                        values[i] === q.iso ? 'border-brand bg-brandsoft text-brand' : 'border-line text-muted'
-                      }`}
-                    >
-                      {q.label}
-                    </button>
-                  ))}
-                  <button
-                    onClick={() => shiftDate(-1)}
-                    className="press rounded-xl border border-line px-3 py-2 text-xs font-bold text-muted"
-                  >
-                    −1 day
-                  </button>
-                  <button
-                    onClick={() => shiftDate(1)}
-                    className="press rounded-xl border border-line px-3 py-2 text-xs font-bold text-muted"
-                  >
-                    +1 day
-                  </button>
-                </div>
+                <DateField value={values[i] ?? ''} onChange={(iso) => setAt(i, iso)} />
               </Field>
             );
           }

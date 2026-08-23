@@ -2,8 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SheetData, SheetMeta } from '../types';
 import * as api from '../lib/sheets';
 import type { ColumnType } from '../lib/columnTypes';
-import { makeFormatters, parseNumeric, type CurrencyCode } from '../lib/format';
-import type { Formatters } from '../lib/finance';
+import { makeFormatters, parseNumeric, type CurrencyCode, type Formatters } from '../lib/format';
 import { sheetUrl } from '../lib/config';
 import { accentFor } from '../lib/accent';
 import {
@@ -13,12 +12,11 @@ import {
   DATE_COLUMN,
   EXPENSE_COLUMNS,
   categoriesIn,
-  dayLabel,
   findColumn,
   monthTitle,
-  parseSheetDate,
   sortMonthSheets,
 } from '../lib/expenses';
+import { MONTH_ABBR, dayLabel, parseSheetDate } from '../lib/dates';
 import { Banner, Button, Empty, IconButton, Sheet, Spinner, inputClass } from './UI';
 import { IconDots, IconExternal, IconPlus, IconRefresh, IconTrash } from './Icons';
 import { ColumnManager } from './Manage';
@@ -804,7 +802,8 @@ function CategoryManager({
   );
 }
 
-const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** Same list `monthTitle` builds tab names from, so the two can't drift apart. */
+const MONTH_NAMES = MONTH_ABBR;
 
 function NewMonthDialog({
   open,

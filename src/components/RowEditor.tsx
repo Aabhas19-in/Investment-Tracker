@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { columnTypeDef, type ColumnType } from '../lib/columnTypes';
+import { parseSheetDate, toISODate, todayISO } from '../lib/dates';
 import { Button, Field, Sheet, inputClass } from './UI';
+import { DateField } from './DateField';
 import { IconTrash } from './Icons';
 
 /** The keyboard that suits each column type — small thing, big deal on a phone. */
@@ -17,7 +19,8 @@ export function RowEditor({
   headers,
   columnTypes,
   accent,
-  initial,
+  displayRow,
+  formulaRow,
   rowNumber,
   onClose,
   onSave,
@@ -27,8 +30,10 @@ export function RowEditor({
   headers: string[];
   columnTypes: ColumnType[];
   accent: string;
-  /** Raw cell contents when editing, empty when adding. */
-  initial: string[] | null;
+  /** Displayed values — used for date cells, whose raw value is a serial number. */
+  displayRow: string[] | null;
+  /** Raw cell contents, so formulas survive an edit. Null when adding. */
+  formulaRow: string[] | null;
   /** Sheet row number, shown so `=C4*D4` style formulas are easy to write. */
   rowNumber: number | null;
   onClose: () => void;
@@ -39,11 +44,30 @@ export function RowEditor({
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  const editing = formulaRow !== null;
+
   useEffect(() => {
     if (!open) return;
-    setValues(headers.map((_, i) => initial?.[i] ?? ''));
+    setValues(
+      headers.map((_, i) => {
+        // Every date column opens on today for a new row, and on its own stored
+        // date when editing — never on a raw serial number.
+        if ((columnTypes[i] ?? 'text') === 'date') {
+          const parsed = parseSheetDate(displayRow?.[i] ?? formulaRow?.[i] ?? '');
+          return parsed ? toISODate(parsed) : editing ? '' : todayISO();
+        }
+        return formulaRow?.[i] ?? '';
+      }),
+    );
     setConfirmDelete(false);
-  }, [open, headers, initial]);
+  }, [open, headers, columnTypes, displayRow, formulaRow, editing]);
+
+  const setAt = (i: number, v: string) =>
+    setValues((prev) => {
+      const next = [...prev];
+      next[i] = v;
+      return next;
+    });
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -55,7 +79,7 @@ export function RowEditor({
   };
 
   return (
-    <Sheet open={open} title={initial ? 'Edit entry' : 'New entry'} onClose={onClose}>
+    <Sheet open={open} title={editing ? 'Edit entry' : 'New entry'} onClose={onClose}>
       <div className="space-y-4">
         {headers.length === 0 && (
           <p className="text-sm text-muted">This sheet has no columns yet. Add one first.</p>
@@ -63,23 +87,27 @@ export function RowEditor({
 
         {headers.map((h, i) => {
           const type = columnTypes[i] ?? 'text';
+
+          if (type === 'date') {
+            return (
+              <Field key={`${h}-${i}`} label={h || 'Date'}>
+                <DateField value={values[i] ?? ''} onChange={(iso) => setAt(i, iso)} />
+              </Field>
+            );
+          }
+
           return (
             <Field key={`${h}-${i}`} label={h || `Column ${i + 1}`}>
               <div className="relative">
                 <input
                   className={inputClass}
                   value={values[i] ?? ''}
-                  type={type === 'date' ? 'date' : 'text'}
                   inputMode={inputModeFor(type)}
                   placeholder={type === 'text' ? '' : '0'}
-                  onChange={(e) => {
-                    const next = [...values];
-                    next[i] = e.target.value;
-                    setValues(next);
-                  }}
+                  onChange={(e) => setAt(i, e.target.value)}
                 />
                 <span className="pointer-events-none absolute top-1/2 right-4 -translate-y-1/2 text-[0.66rem] font-bold tracking-wider text-muted/70 uppercase">
-                  {type !== 'text' && type !== 'date' ? columnTypeDef(type).label : ''}
+                  {type !== 'text' ? columnTypeDef(type).label : ''}
                 </span>
               </div>
             </Field>

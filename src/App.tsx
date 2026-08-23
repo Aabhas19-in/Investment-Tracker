@@ -6,7 +6,6 @@ import { isSignedIn, onAuthChange, signIn } from './lib/googleAuth';
 import * as api from './lib/sheets';
 import { Banner, Button } from './components/UI';
 import {
-  IconCalculator,
   IconChart,
   IconGear,
   IconReceipt,
@@ -17,14 +16,12 @@ import {
 import { DataView, type DataActions } from './components/DataView';
 import { ExpensesView } from './components/ExpensesView';
 import { Summary } from './components/Summary';
-import { Calculators } from './components/Calculators';
 import { Settings } from './components/Settings';
 
 const TABS: { id: Tab; label: string; icon: typeof IconWallet }[] = [
   { id: 'data', label: 'Investments', icon: IconWallet },
   { id: 'expenses', label: 'Expenses', icon: IconReceipt },
   { id: 'summary', label: 'Summary', icon: IconChart },
-  { id: 'calc', label: 'Calc', icon: IconCalculator },
   { id: 'settings', label: 'Settings', icon: IconGear },
 ];
 
@@ -32,7 +29,6 @@ const TITLES: Record<Tab, string> = {
   data: 'Your investments',
   expenses: 'Where it goes',
   summary: 'Where you stand',
-  calc: 'Run the numbers',
   settings: 'Settings',
 };
 
@@ -274,7 +270,6 @@ export default function App() {
         />
       )}
       {tab === 'summary' && <Summary ctx={ctx} sheets={sheets} currency={CURRENCY} />}
-      {tab === 'calc' && <Calculators currency={CURRENCY} />}
       {tab === 'settings' && (
         <Settings
           config={config}
@@ -315,7 +310,7 @@ function Shell({
           className="shrink-0 border-t border-line bg-surface/85 backdrop-blur-xl"
           style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
         >
-          <div className="mx-auto grid max-w-lg grid-cols-5 px-1 py-1.5">
+          <div className="mx-auto grid max-w-lg grid-cols-4 px-2 py-1.5">
             {TABS.map((t) => {
               const on = tab === t.id;
               const Icon = t.icon;
@@ -326,14 +321,14 @@ function Shell({
                   className="press flex flex-col items-center gap-1 rounded-2xl py-2"
                 >
                   <span
-                    className={`grid h-8 w-12 place-items-center rounded-full transition-colors ${
+                    className={`grid h-8 w-14 place-items-center rounded-full transition-colors ${
                       on ? 'bg-brandsoft text-brand' : 'text-muted'
                     }`}
                   >
                     <Icon className="size-5" strokeWidth={on ? 2.3 : 1.9} />
                   </span>
                   <span
-                    className={`text-[0.58rem] leading-none font-bold tracking-tight ${
+                    className={`text-[0.64rem] leading-none font-bold tracking-tight ${
                       on ? 'text-brand' : 'text-muted'
                     }`}
                   >

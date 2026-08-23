@@ -4,7 +4,6 @@ import { readSheet, type SheetsCtx } from '../lib/sheets';
 import { makeFormatters, parseNumeric, type CurrencyCode } from '../lib/format';
 import { columnTypeDef } from '../lib/columnTypes';
 import { accentFor, initials } from '../lib/accent';
-import { absoluteReturn } from '../lib/finance';
 import { Badge, Banner, Button, Empty, Spinner } from './UI';
 import { IconArrowDown, IconArrowUp, IconRefresh } from './Icons';
 
@@ -14,6 +13,12 @@ interface SheetSummary {
   totals: { header: string; total: number }[];
   invested?: number;
   currentValue?: number;
+}
+
+/** Percentage gain (or loss) of `current` against what was put in. */
+function absoluteReturn(invested: number, current: number) {
+  if (invested <= 0) return NaN;
+  return ((current - invested) / invested) * 100;
 }
 
 /** Best-effort guess at which column holds money in vs money now, purely from the header text. */

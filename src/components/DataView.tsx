@@ -124,22 +124,20 @@ export function DataView({
     [headers, defs, visible],
   );
 
-  // Dismissed totals are a per-sheet view preference, remembered like the theme.
+  // Which totals show as tags is a per-sheet view preference, remembered like
+  // the theme. Crossing a tag off here is the same switch as the one in
+  // Manage columns, so it stays off until you turn it back on there.
   const sheetKey = active?.title ?? '';
   const hidden = config.hiddenTotals[sheetKey] ?? [];
   const shownTotals = totals.filter((t) => !hidden.includes(t.header));
-  const hiddenCount = totals.length - shownTotals.length;
 
-  const hideTotal = (header: string) =>
+  const setTagVisible = (header: string, visible: boolean) =>
     setConfig({
-      hiddenTotals: { ...config.hiddenTotals, [sheetKey]: [...hidden, header] },
+      hiddenTotals: {
+        ...config.hiddenTotals,
+        [sheetKey]: visible ? hidden.filter((h) => h !== header) : [...hidden, header],
+      },
     });
-
-  const restoreTotals = () => {
-    const next = { ...config.hiddenTotals };
-    delete next[sheetKey];
-    setConfig({ hiddenTotals: next });
-  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -191,7 +189,7 @@ export function DataView({
                   className="relative min-w-36 shrink-0 rounded-card bg-surface px-4 py-3 shadow-card"
                 >
                   <button
-                    onClick={() => hideTotal(t.header)}
+                    onClick={() => setTagVisible(t.header, false)}
                     aria-label={`Hide ${t.header} total`}
                     className="press absolute top-2 right-2 grid size-6 place-items-center rounded-full bg-surface2 text-muted"
                   >
@@ -206,14 +204,6 @@ export function DataView({
                 </div>
               ))}
 
-              {hiddenCount > 0 && (
-                <button
-                  onClick={restoreTotals}
-                  className="press shrink-0 self-stretch rounded-card border border-dashed border-line px-4 text-xs font-bold text-muted"
-                >
-                  Show {hiddenCount} hidden
-                </button>
-              )}
             </div>
           )}
 
@@ -313,7 +303,9 @@ export function DataView({
         ) : (
           <div className="px-4 pb-32">
             <div className="scroll-x rounded-card bg-surface shadow-card">
-              <table className="w-full border-collapse text-sm">
+              {/* border-separate, not collapse: sticky cells don't work under
+                  border-collapse in Chrome, which unpins the Edit column. */}
+              <table className="w-full border-separate border-spacing-0 text-sm">
                 <thead>
                   <tr>
                     {headers.map((h, i) => (
@@ -384,6 +376,7 @@ export function DataView({
           headers={headers}
           columnTypes={data?.columnTypes ?? []}
           sheetTitle={active.title}
+          tags={{ hidden, onToggle: setTagVisible }}
           onClose={() => setColumnsOpen(false)}
           onAdd={actions.addColumn}
           onRename={actions.renameColumn}
@@ -398,7 +391,8 @@ export function DataView({
         columnTypes={data?.columnTypes ?? []}
         accent={accent}
         rowNumber={typeof editing === 'number' ? editing + 2 : rows.length + 2}
-        initial={typeof editing === 'number' ? (data?.formulaRows[editing] ?? []) : null}
+        displayRow={typeof editing === 'number' ? (rows[editing] ?? []) : null}
+        formulaRow={typeof editing === 'number' ? (data?.formulaRows[editing] ?? []) : null}
         onClose={() => setEditing(null)}
         onSave={async (values) => {
           if (typeof editing === 'number') await actions.updateRow(editing, values);
@@ -503,13 +497,11 @@ function EntryCard({
   const date = highlights.date >= 0 ? row[highlights.date] : '';
   const value = highlights.value >= 0 ? row[highlights.value] : '';
 
+  // Every remaining column, empty ones included — otherwise a freshly added
+  // column (appended last, still blank) would be invisible on the card.
   const rest = headers
     .map((h, i) => ({ h, v: row[i], i }))
-    .filter(
-      ({ v, i }) =>
-        v?.trim() && i !== highlights.title && i !== highlights.date && i !== highlights.value,
-    )
-    .slice(0, 4);
+    .filter(({ i }) => i !== highlights.title && i !== highlights.date && i !== highlights.value);
 
   return (
     <li
@@ -540,8 +532,12 @@ function EntryCard({
               <dt className="truncate text-[0.66rem] font-bold tracking-wider text-muted uppercase">
                 {h}
               </dt>
-              <dd className={`truncate text-sm font-semibold ${defs[i].numeric ? 'tabular-nums' : ''}`}>
-                {v}
+              <dd
+                className={`truncate text-sm font-semibold ${defs[i].numeric ? 'tabular-nums' : ''} ${
+                  v?.trim() ? '' : 'text-muted/50'
+                }`}
+              >
+                {v?.trim() || '—'}
               </dd>
             </div>
           ))}

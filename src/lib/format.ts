@@ -1,4 +1,8 @@
-import type { Formatters } from './finance';
+export interface Formatters {
+  money(n: number): string;
+  pct(n: number): string;
+  num(n: number): string;
+}
 
 export const CURRENCIES = [
   { code: 'INR', symbol: '₹', locale: 'en-IN' },

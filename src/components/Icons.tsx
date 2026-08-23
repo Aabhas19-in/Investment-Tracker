@@ -37,14 +37,6 @@ export const IconChart = (p: P) => (
   </Svg>
 );
 
-export const IconCalculator = (p: P) => (
-  <Svg {...p}>
-    <rect x="4" y="3" width="16" height="18" rx="3" />
-    <path d="M8 7h8" />
-    <path d="M8.5 12h.01M12 12h.01M15.5 12h.01M8.5 16h.01M12 16h.01M15.5 16h.01" />
-  </Svg>
-);
-
 export const IconGear = (p: P) => (
   <Svg {...p}>
     <circle cx="12" cy="12" r="3.2" />
