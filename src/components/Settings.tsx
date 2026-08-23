@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { CURRENCIES, type CurrencyCode } from '../lib/format';
 import {
   extractSpreadsheetId,
   sheetUrl,
@@ -16,6 +15,24 @@ const THEMES: { id: ThemePref; label: string; emoji: string }[] = [
   { id: 'light', label: 'Light', emoji: '☀️' },
   { id: 'dark', label: 'Dark', emoji: '🌙' },
 ];
+
+/** Open + download, offered identically for each workbook the app is linked to. */
+function SheetLinks({ id }: { id: string }) {
+  const linkClass =
+    'press flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-line px-5 text-[0.9rem] font-bold text-ink2';
+  return (
+    <div className="space-y-3">
+      <a href={sheetUrl(id)} target="_blank" rel="noreferrer" className={linkClass}>
+        <IconExternal className="size-5" />
+        Open in Google Sheets
+      </a>
+      <a href={xlsxDownloadUrl(id)} className={linkClass}>
+        <IconDownload className="size-5" />
+        Download as Excel (.xlsx)
+      </a>
+    </div>
+  );
+}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -76,21 +93,6 @@ export function Settings({
           })}
         </div>
 
-        <div className="mt-5">
-          <Field label="Currency">
-            <select
-              className={inputClass}
-              value={config.currency}
-              onChange={(e) => setConfig({ currency: e.target.value as CurrencyCode })}
-            >
-              {CURRENCIES.map((c) => (
-                <option key={c.code} value={c.code}>
-                  {c.symbol} {c.code}
-                </option>
-              ))}
-            </select>
-          </Field>
-        </div>
       </Section>
 
       <Section title="Connection">
@@ -139,31 +141,21 @@ export function Settings({
       </Section>
 
       {config.spreadsheetId && (
-        <Section title="Your sheet">
-          <div className="space-y-3">
-            <a
-              href={sheetUrl(config.spreadsheetId)}
-              target="_blank"
-              rel="noreferrer"
-              className="press flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-line px-5 text-[0.9rem] font-bold text-ink2"
-            >
-              <IconExternal className="size-5" />
-              Open in Google Sheets
-            </a>
-            <a
-              href={xlsxDownloadUrl(config.spreadsheetId)}
-              className="press flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-line px-5 text-[0.9rem] font-bold text-ink2"
-            >
-              <IconDownload className="size-5" />
-              Download as Excel (.xlsx)
-            </a>
-            {signedIn && (
-              <Button full variant="danger" icon={<IconLogout />} onClick={signOut}>
-                Sign out of Google
-              </Button>
-            )}
-          </div>
+        <Section title="Investments sheet">
+          <SheetLinks id={config.spreadsheetId} />
         </Section>
+      )}
+
+      {config.expensesSpreadsheetId && (
+        <Section title="Expenses sheet">
+          <SheetLinks id={config.expensesSpreadsheetId} />
+        </Section>
+      )}
+
+      {signedIn && (
+        <Button full variant="danger" icon={<IconLogout />} onClick={signOut}>
+          Sign out of Google
+        </Button>
       )}
 
       <div className="rounded-card border border-line px-5 py-4 text-xs leading-relaxed text-muted">

@@ -12,7 +12,7 @@ export function Button({
 }: {
   children?: ReactNode;
   onClick?: () => void;
-  variant?: 'primary' | 'soft' | 'ghost' | 'danger';
+  variant?: 'primary' | 'leaf' | 'soft' | 'ghost' | 'danger';
   disabled?: boolean;
   type?: 'button' | 'submit';
   full?: boolean;
@@ -20,6 +20,8 @@ export function Button({
 }) {
   const styles = {
     primary: 'bg-brand text-onbrand shadow-soft',
+    // Takes its green from the sign-in tree; lightens a step in dark mode.
+    leaf: 'bg-leaf text-white shadow-soft',
     soft: 'bg-brandsoft text-brand',
     ghost: 'bg-surface text-ink2 border border-line shadow-soft',
     danger: 'bg-neg/10 text-neg border border-neg/25',

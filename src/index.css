@@ -19,6 +19,8 @@
   --on-brand: #ffffff;
   --pos: #0e9f6e;
   --neg: #e0405e;
+  /* Same green as the sign-in tree, so the CTA belongs to the illustration. */
+  --leaf: #4f8a64;
   --shadow-sm: 0 1px 2px rgb(28 23 20 / 0.05);
   --shadow-md: 0 2px 4px rgb(28 23 20 / 0.04), 0 12px 28px -14px rgb(28 23 20 / 0.22);
   --shadow-lg: 0 8px 40px -12px rgb(91 75 234 / 0.45);
@@ -40,6 +42,7 @@
     --on-brand: #14121f;
     --pos: #34d399;
     --neg: #fb7185;
+    --leaf: #63a97b;
     --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
     --shadow-md: 0 2px 4px rgb(0 0 0 / 0.2), 0 12px 28px -14px rgb(0 0 0 / 0.6);
     --shadow-lg: 0 8px 40px -12px rgb(157 139 255 / 0.5);
@@ -61,6 +64,7 @@
   --on-brand: #14121f;
   --pos: #34d399;
   --neg: #fb7185;
+  --leaf: #63a97b;
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
   --shadow-md: 0 2px 4px rgb(0 0 0 / 0.2), 0 12px 28px -14px rgb(0 0 0 / 0.6);
   --shadow-lg: 0 8px 40px -12px rgb(157 139 255 / 0.5);
@@ -79,6 +83,7 @@
   --color-onbrand: var(--on-brand);
   --color-pos: var(--pos);
   --color-neg: var(--neg);
+  --color-leaf: var(--leaf);
 
   --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 

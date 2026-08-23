@@ -3,10 +3,12 @@ import type { SheetData, SheetMeta } from '../types';
 import * as api from '../lib/sheets';
 import type { ColumnType } from '../lib/columnTypes';
 import { makeFormatters, parseNumeric, type CurrencyCode } from '../lib/format';
+import type { Formatters } from '../lib/finance';
 import { sheetUrl } from '../lib/config';
 import { accentFor } from '../lib/accent';
 import {
   AMOUNT_COLUMN,
+  CATEGORIES_SHEET,
   CATEGORY_COLUMN,
   DATE_COLUMN,
   EXPENSE_COLUMNS,
@@ -17,7 +19,7 @@ import {
   parseSheetDate,
   sortMonthSheets,
 } from '../lib/expenses';
-import { Banner, Button, Empty, IconButton, Sheet, Spinner } from './UI';
+import { Banner, Button, Empty, IconButton, Sheet, Spinner, inputClass } from './UI';
 import { IconDots, IconExternal, IconPlus, IconRefresh, IconTrash } from './Icons';
 import { ColumnManager } from './Manage';
 import { ExpenseEditor } from './ExpenseEditor';
@@ -36,7 +38,9 @@ export function ExpensesView({
   const ctx: api.SheetsCtx = useMemo(() => ({ clientId, spreadsheetId }), [clientId, spreadsheetId]);
   const fmt = useMemo(() => makeFormatters(currency), [currency]);
 
-  const [months, setMonths] = useState<SheetMeta[]>([]);
+  const [allSheets, setAllSheets] = useState<SheetMeta[]>([]);
+  const [managedCategories, setManagedCategories] = useState<string[]>([]);
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
   const [activeTitle, setActiveTitle] = useState<string | null>(null);
   const [data, setData] = useState<SheetData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -49,6 +53,12 @@ export function ExpensesView({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [filter, setFilter] = useState<string | null>(null);
 
+  // The Categories tab isn't a month, so it never appears in the month switcher.
+  const months = useMemo(
+    () => sortMonthSheets(allSheets.filter((s) => s.title !== CATEGORIES_SHEET)),
+    [allSheets],
+  );
+  const categorySheet = allSheets.find((s) => s.title === CATEGORIES_SHEET) ?? null;
   const active = months.find((m) => m.title === activeTitle) ?? null;
   const fail = (e: unknown) => setError(e instanceof Error ? e.message : String(e));
 
@@ -58,8 +68,9 @@ export function ExpensesView({
       setLoading(true);
       setError(null);
       try {
-        const list = sortMonthSheets(await api.listSheets(ctx));
-        setMonths(list);
+        const raw = await api.listSheets(ctx);
+        setAllSheets(raw);
+        const list = sortMonthSheets(raw.filter((s) => s.title !== CATEGORIES_SHEET));
         setActiveTitle((prev) => {
           const wanted = prefer ?? prev;
           if (list.some((s) => s.title === wanted)) return wanted!;
@@ -92,9 +103,23 @@ export function ExpensesView({
     [ctx, spreadsheetId],
   );
 
+  const readCategories = useCallback(async () => {
+    try {
+      const d = await api.readSheet(ctx, CATEGORIES_SHEET);
+      setManagedCategories(d.rows.map((r) => (r[0] ?? '').trim()).filter(Boolean));
+    } catch (e) {
+      fail(e);
+    }
+  }, [ctx]);
+
   useEffect(() => {
     void loadMonths();
   }, [loadMonths]);
+
+  useEffect(() => {
+    if (!categorySheet) return setManagedCategories([]);
+    void readCategories();
+  }, [categorySheet, readCategories]);
 
   useEffect(() => {
     void loadData(activeTitle);
@@ -123,7 +148,32 @@ export function ExpensesView({
   const catIdx = findColumn(headers, CATEGORY_COLUMN, types);
   const amountIdx = findColumn(headers, AMOUNT_COLUMN, types, 'currency');
 
-  const categories = useMemo(() => categoriesIn(rows, catIdx), [rows, catIdx]);
+  /**
+   * The managed list, plus any category already used in this month that isn't on
+   * it — so historic entries stay selectable even after a category is retired.
+   */
+  const inUse = useMemo(() => categoriesIn(rows, catIdx), [rows, catIdx]);
+  const categories = useMemo(
+    () => [...managedCategories, ...inUse.filter((c) => !managedCategories.includes(c))],
+    [managedCategories, inUse],
+  );
+
+  const addCategory = async (name: string) => {
+    if (!categorySheet) {
+      await api.addSheet(ctx, CATEGORIES_SHEET, [{ name: CATEGORY_COLUMN, type: 'text' }], currency);
+      setAllSheets(await api.listSheets(ctx));
+    }
+    await api.appendRow(ctx, CATEGORIES_SHEET, [name]);
+    await readCategories();
+  };
+
+  const removeCategory = async (name: string) => {
+    if (!categorySheet) return;
+    const idx = managedCategories.indexOf(name);
+    if (idx < 0) return;
+    await api.deleteRow(ctx, categorySheet.sheetId, idx);
+    await readCategories();
+  };
 
   const entries = useMemo(
     () =>
@@ -259,33 +309,18 @@ export function ExpensesView({
             <p className="mt-2 text-xs font-semibold text-white/75">
               {shown.length} {shown.length === 1 ? 'expense' : 'expenses'}
             </p>
-          </div>
 
-          {/* Divisions inside the month */}
-          {categoryTotals.length > 0 && (
-            <div className="scroll-x -mx-4 mt-3 flex gap-2 px-4">
-              <button
-                onClick={() => setFilter(null)}
-                className={`press shrink-0 rounded-xl border px-3.5 py-2 text-xs font-bold ${
-                  filter === null ? 'border-brand bg-brandsoft text-brand' : 'border-line text-muted'
-                }`}
-              >
-                All
-              </button>
-              {categoryTotals.map(([name, total]) => (
-                <button
-                  key={name}
-                  onClick={() => setFilter(filter === name ? null : name)}
-                  className={`press shrink-0 rounded-xl border px-3.5 py-2 text-xs font-bold ${
-                    filter === name ? 'border-brand bg-brandsoft text-brand' : 'border-line text-muted'
-                  }`}
-                >
-                  {name}
-                  <span className="ml-1.5 tabular-nums opacity-70">{fmt.money(total)}</span>
-                </button>
-              ))}
-            </div>
-          )}
+            {/* The split lives inside the total card, not in a card of its own. */}
+            {categoryTotals.length > 0 && (
+              <CategoryBubbles
+                totals={categoryTotals}
+                grandTotal={categoryTotals.reduce((s, [, v]) => s + v, 0)}
+                selected={filter}
+                fmt={fmt}
+                onSelect={(name) => setFilter(filter === name ? null : name)}
+              />
+            )}
+          </div>
 
           <div className="mt-3 flex items-center gap-2">
             <div className="flex-1">
@@ -415,6 +450,15 @@ export function ExpensesView({
         </button>
       )}
 
+      <CategoryManager
+        open={categoriesOpen}
+        managed={managedCategories}
+        inUse={inUse}
+        onClose={() => setCategoriesOpen(false)}
+        onAdd={addCategory}
+        onRemove={removeCategory}
+      />
+
       <NewMonthDialog
         open={newMonthOpen}
         existing={months.map((m) => m.title)}
@@ -489,6 +533,16 @@ export function ExpensesView({
           <div className="space-y-3">
             <Button
               full
+              onClick={() => {
+                setMoreOpen(false);
+                setCategoriesOpen(true);
+              }}
+            >
+              Categories ({categories.length})
+            </Button>
+
+            <Button
+              full
               variant="ghost"
               onClick={() => {
                 setMoreOpen(false);
@@ -531,6 +585,222 @@ export function ExpensesView({
         </Sheet>
       )}
     </div>
+  );
+}
+
+/**
+ * Spend per category as circles. Area — not diameter — is proportional to the
+ * amount, so the eye reads the split correctly: hence the sqrt on the radius.
+ */
+function CategoryBubbles({
+  totals,
+  grandTotal,
+  selected,
+  fmt,
+  onSelect,
+}: {
+  totals: [string, number][];
+  grandTotal: number;
+  selected: string | null;
+  fmt: Formatters;
+  onSelect: (name: string) => void;
+}) {
+  // Uniform bubbles: the percentage on each one carries the comparison instead.
+  const SIZE = 100;
+
+  return (
+    <div className="mt-5 border-t border-white/20 pt-4">
+      <div className="flex items-baseline justify-between">
+        <h3 className="text-[0.65rem] font-extrabold tracking-widest text-white/70 uppercase">
+          Where it went
+        </h3>
+        {selected && (
+          <button
+            onClick={() => onSelect(selected)}
+            className="press text-xs font-bold text-white/90 underline underline-offset-2"
+          >
+            Clear filter
+          </button>
+        )}
+      </div>
+
+      <div className="mt-3.5 flex flex-wrap items-center justify-center gap-2.5">
+        {totals.map(([name, value], i) => {
+          const color = accentFor(name);
+          const share = grandTotal > 0 ? Math.round((value / grandTotal) * 100) : 0;
+          const on = selected === name;
+          const amount = fmt.money(value);
+
+          // The full amount has to fit inside a circle, so step the type down
+          // as the number gets longer rather than truncating it.
+          const amountSize = amount.length > 11 ? 0.6 : amount.length > 8 ? 0.7 : 0.82;
+
+          return (
+            <button
+              key={name}
+              onClick={() => onSelect(name)}
+              title={`${name} · ${amount} · ${share}%`}
+              style={{
+                width: SIZE,
+                height: SIZE,
+                animationDelay: `${Math.min(i, 8) * 40}ms`,
+                background: on ? '#fff' : 'rgb(255 255 255 / 0.92)',
+                boxShadow: on ? '0 0 0 3px rgb(255 255 255 / 0.55)' : undefined,
+                color,
+              }}
+              className="press animate-rise flex shrink-0 flex-col items-center justify-center gap-0.5 rounded-full px-2.5 text-center"
+            >
+              <span className="w-full truncate text-[0.64rem] font-bold">{name}</span>
+              <span
+                className="w-full font-extrabold tabular-nums"
+                style={{ fontSize: `${amountSize}rem` }}
+              >
+                {amount}
+              </span>
+              <span className="text-[0.6rem] font-bold tabular-nums opacity-65">{share}%</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <p className="mt-3.5 text-center text-[0.68rem] font-medium text-white/70">
+        Tap a category to filter this month
+      </p>
+    </div>
+  );
+}
+
+/** Create and retire categories deliberately, away from the add-expense flow. */
+function CategoryManager({
+  open,
+  managed,
+  inUse,
+  onClose,
+  onAdd,
+  onRemove,
+}: {
+  open: boolean;
+  managed: string[];
+  /** Categories present in this month's data — shown but not deletable from here. */
+  inUse: string[];
+  onClose: () => void;
+  onAdd: (name: string) => Promise<void>;
+  onRemove: (name: string) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setDraft('');
+    setError(null);
+    setPending(null);
+  }, [open]);
+
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const create = () => {
+    const name = draft.trim();
+    if (!name) return setError('Give the category a name.');
+    if (managed.some((c) => c.toLowerCase() === name.toLowerCase()))
+      return setError(`"${name}" already exists.`);
+    return run(async () => {
+      await onAdd(name);
+      setDraft('');
+    });
+  };
+
+  const orphans = inUse.filter((c) => !managed.includes(c));
+
+  return (
+    <Sheet open={open} title="Categories" onClose={onClose}>
+      <div className="space-y-5">
+        <div className="rounded-2xl border border-dashed border-line p-4">
+          <div className="flex gap-2">
+            <input
+              className={inputClass}
+              value={draft}
+              placeholder="e.g. Groceries"
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  create();
+                }
+              }}
+            />
+            <Button disabled={busy || !draft.trim()} onClick={create}>
+              Create
+            </Button>
+          </div>
+          <p className="mt-2.5 text-xs text-muted">
+            Saved to a <span className="font-bold">Categories</span> tab in your expenses
+            spreadsheet, so the list survives even before you spend anything under it.
+          </p>
+        </div>
+
+        {managed.length === 0 && orphans.length === 0 ? (
+          <p className="py-4 text-center text-sm text-muted">
+            No categories yet. Create your first one above.
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {managed.map((c) => (
+              <li
+                key={c}
+                className="flex items-center gap-2 rounded-2xl border border-line px-4 py-2.5"
+              >
+                <span className="min-w-0 flex-1 truncate font-bold">{c}</span>
+                {pending === c ? (
+                  <Button variant="danger" disabled={busy} onClick={() => run(() => onRemove(c))}>
+                    Sure?
+                  </Button>
+                ) : (
+                  <button
+                    onClick={() => setPending(c)}
+                    aria-label={`Remove ${c}`}
+                    className="press grid size-9 shrink-0 place-items-center rounded-xl bg-surface2 text-muted"
+                  >
+                    <IconTrash className="size-4" />
+                  </button>
+                )}
+              </li>
+            ))}
+
+            {orphans.map((c) => (
+              <li
+                key={c}
+                className="flex items-center gap-2 rounded-2xl border border-dashed border-line px-4 py-2.5"
+              >
+                <span className="min-w-0 flex-1 truncate font-bold text-muted">{c}</span>
+                <span className="shrink-0 text-[0.65rem] font-bold tracking-wider text-muted uppercase">
+                  in use
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {error && <Banner kind="error">{error}</Banner>}
+
+        <p className="px-1 text-xs leading-relaxed text-muted">
+          Removing a category only takes it off this list — expenses already filed under it keep
+          their value and stay selectable.
+        </p>
+      </div>
+    </Sheet>
   );
 }
 

@@ -10,13 +10,28 @@ export const CURRENCIES = [
 
 export type CurrencyCode = (typeof CURRENCIES)[number]['code'];
 
+/** The app is INR-only. Kept as one constant so it's a one-line change if that ever shifts. */
+export const CURRENCY: CurrencyCode = 'INR';
+
 export function makeFormatters(code: CurrencyCode): Formatters {
   const cur = CURRENCIES.find((c) => c.code === code) ?? CURRENCIES[0];
-  const money = new Intl.NumberFormat(cur.locale, {
+  // Exact, never rounded to the nearest rupee. Paise appear as a proper pair of
+  // digits when the amount has them, and are left off entirely when it doesn't:
+  // ₹1,234.50 but ₹1,200 — not ₹1,234.5 and not ₹1,200.00.
+  const whole = new Intl.NumberFormat(cur.locale, {
     style: 'currency',
     currency: cur.code,
     maximumFractionDigits: 0,
   });
+  const withPaise = new Intl.NumberFormat(cur.locale, {
+    style: 'currency',
+    currency: cur.code,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  const money = {
+    format: (n: number) => (Math.abs(n % 1) > 1e-9 ? withPaise : whole).format(n),
+  };
   const plain = new Intl.NumberFormat(cur.locale, { maximumFractionDigits: 2 });
 
   return {

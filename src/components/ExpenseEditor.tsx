@@ -8,7 +8,7 @@ import {
   todayISO,
 } from '../lib/expenses';
 import { Banner, Button, Field, Sheet, inputClass } from './UI';
-import { IconPlus, IconTrash } from './Icons';
+import { IconTrash } from './Icons';
 
 function inputModeFor(type: ColumnType): 'decimal' | 'text' {
   return type === 'currency' || type === 'number' || type === 'percent' ? 'decimal' : 'text';
@@ -51,7 +51,6 @@ export function ExpenseEditor({
   onDelete?: () => Promise<void>;
 }) {
   const [values, setValues] = useState<string[]>([]);
-  const [newCategory, setNewCategory] = useState(false);
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -69,7 +68,6 @@ export function ExpenseEditor({
         return formulaRow?.[i] ?? '';
       }),
     );
-    setNewCategory(false);
     setConfirmDelete(false);
   }, [open, headers, dateIndex, displayRow, formulaRow, editing]);
 
@@ -158,46 +156,33 @@ export function ExpenseEditor({
           }
 
           if (i === categoryIndex) {
+            // Pick-only: new categories are created deliberately from ⋯ → Categories,
+            // never as a side effect of logging an expense.
             return (
-              <Field key={i} label={h || 'Category'} hint="Tap one, or add a new division of your own.">
-                <div className="flex flex-wrap gap-2">
-                  {categories.map((c) => (
-                    <button
-                      key={c}
-                      onClick={() => {
-                        setAt(i, c);
-                        setNewCategory(false);
-                      }}
-                      className={`press rounded-xl border px-3 py-2 text-xs font-bold ${
-                        values[i] === c && !newCategory
-                          ? 'border-brand bg-brandsoft text-brand'
-                          : 'border-line text-muted'
-                      }`}
-                    >
-                      {c}
-                    </button>
-                  ))}
-                  <button
-                    onClick={() => {
-                      setNewCategory(true);
-                      setAt(i, '');
-                    }}
-                    className={`press flex items-center gap-1 rounded-xl border border-dashed px-3 py-2 text-xs font-bold ${
-                      newCategory ? 'border-brand text-brand' : 'border-line text-muted'
-                    }`}
-                  >
-                    <IconPlus className="size-3.5" />
-                    New
-                  </button>
-                </div>
-                {(newCategory || (values[i] && !categories.includes(values[i]))) && (
-                  <input
-                    className={`${inputClass} mt-2`}
-                    value={values[i] ?? ''}
-                    autoFocus={newCategory}
-                    placeholder="e.g. Groceries"
-                    onChange={(e) => setAt(i, e.target.value)}
-                  />
+              <Field key={i} label={h || 'Category'} hint="Tap one of your categories.">
+                {categories.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-line px-4 py-4 text-center">
+                    <p className="text-sm font-bold">No categories yet</p>
+                    <p className="mt-1 text-xs text-muted">
+                      Close this and use ⋯ → Categories to create some first.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {categories.map((c) => (
+                      <button
+                        key={c}
+                        onClick={() => setAt(i, values[i] === c ? '' : c)}
+                        className={`press rounded-xl border px-3.5 py-2.5 text-xs font-bold ${
+                          values[i] === c
+                            ? 'border-brand bg-brandsoft text-brand'
+                            : 'border-line text-muted'
+                        }`}
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
                 )}
               </Field>
             );

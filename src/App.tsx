@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { SheetData, SheetMeta, Tab } from './types';
 import { useConfig } from './lib/config';
+import { CURRENCY } from './lib/format';
 import { isSignedIn, onAuthChange, signIn } from './lib/googleAuth';
 import * as api from './lib/sheets';
 import { Banner, Button } from './components/UI';
@@ -11,6 +12,7 @@ import {
   IconReceipt,
   IconSparkle,
   IconWallet,
+  TreeArt,
 } from './components/Icons';
 import { DataView, type DataActions } from './components/DataView';
 import { ExpensesView } from './components/ExpensesView';
@@ -44,7 +46,7 @@ function greeting() {
 
 export default function App() {
   const [config, setConfig] = useConfig();
-  const [tab, setTab] = useState<Tab>('data');
+  const [tab, setTab] = useState<Tab>('expenses');
   const [signedIn, setSignedIn] = useState(isSignedIn);
 
   const [sheets, setSheets] = useState<SheetMeta[]>([]);
@@ -130,19 +132,19 @@ export default function App() {
 
   const actions: DataActions = {
     createSheet: (title, columns) =>
-      mutate(() => api.addSheet(ctx, title, columns, config.currency), { relist: true, title }),
+      mutate(() => api.addSheet(ctx, title, columns, CURRENCY), { relist: true, title }),
     deleteSheet: (sheetId) => mutate(() => api.deleteSheet(ctx, sheetId), { relist: true }),
     renameSheet: (sheetId, title) =>
       mutate(() => api.renameSheet(ctx, sheetId, title), { relist: true, title }),
     addColumn: (name, type) =>
       mutate(async () => {
         if (!active) return;
-        await api.addColumn(ctx, active, name, data?.headers.length ?? 0, type, config.currency);
+        await api.addColumn(ctx, active, name, data?.headers.length ?? 0, type, CURRENCY);
         await loadSheets(active.title); // column count changed
       }),
     renameColumn: (index, name) => mutate(() => api.renameColumn(ctx, active!.title, index, name)),
     retypeColumn: (index, type) =>
-      mutate(() => api.setColumnType(ctx, active!.sheetId, index, type, config.currency)),
+      mutate(() => api.setColumnType(ctx, active!.sheetId, index, type, CURRENCY)),
     deleteColumn: (index) => mutate(() => api.deleteColumn(ctx, active!.sheetId, index)),
     addRow: (values) => mutate(() => api.appendRow(ctx, active!.title, values)),
     updateRow: (index, values) => mutate(() => api.updateRow(ctx, active!.title, index, values)),
@@ -182,20 +184,24 @@ export default function App() {
   if (!signedIn) {
     return (
       <Shell tab={tab} setTab={setTab} hideNav>
-        <div className="flex min-h-0 flex-1 flex-col justify-center overflow-y-auto px-7 py-10">
-          <div className="animate-rise mx-auto w-full max-w-sm text-center">
-            <div className="mx-auto grid size-24 place-items-center rounded-[2rem] bg-surface text-5xl shadow-card">
-              🪴
-            </div>
-            <h1 className="mt-7 text-3xl font-extrabold tracking-tight">Investment Tracker</h1>
-            <p className="mt-3 text-sm leading-relaxed text-muted">
-              Your money, in your own spreadsheet. Nothing is stored here — every number is read
-              fresh from your sheet, every time.
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-10">
+          <div
+            className="animate-rise mx-auto w-full max-w-sm"
+            style={{ paddingTop: 'max(3.5rem, env(safe-area-inset-top))' }}
+          >
+            <TreeArt className="mx-auto w-40 text-ink" />
+
+            <h1 className="mt-8 text-center text-[1.7rem] leading-tight font-extrabold tracking-tight">
+              Investment & Expense Tracker
+            </h1>
+            <p className="mx-auto mt-3 max-w-[17rem] text-center text-sm leading-relaxed text-muted">
+              What you own and what you spend, kept in your own spreadsheet.
             </p>
 
-            <div className="mt-9 space-y-3">
+            <div className="mt-10">
               <Button
                 full
+                variant="leaf"
                 onClick={async () => {
                   setError(null);
                   try {
@@ -207,13 +213,14 @@ export default function App() {
               >
                 Sign in with Google
               </Button>
-              <Button full variant="ghost" onClick={() => setTab('settings')}>
-                Change spreadsheet
-              </Button>
+              <p className="mt-4 text-center text-xs leading-relaxed text-muted">
+                Nothing is stored here — the token lives in memory and disappears when you close the
+                tab.
+              </p>
             </div>
 
             {error && (
-              <div className="mt-6 text-left">
+              <div className="mt-5">
                 <Banner kind="error">{error}</Banner>
               </div>
             )}
@@ -230,7 +237,7 @@ export default function App() {
       header={
         <div className="flex items-end justify-between gap-3 px-4 pt-3 pb-1">
           <div className="min-w-0">
-            {tab === 'data' && (
+            {(tab === 'data' || tab === 'expenses') && (
               <p className="text-xs font-bold tracking-wide text-muted">{greeting()},</p>
             )}
             <h1 className="truncate text-2xl font-extrabold tracking-tight">{TITLES[tab]}</h1>
@@ -263,11 +270,11 @@ export default function App() {
         <ExpensesView
           spreadsheetId={config.expensesSpreadsheetId}
           clientId={config.clientId}
-          currency={config.currency}
+          currency={CURRENCY}
         />
       )}
-      {tab === 'summary' && <Summary ctx={ctx} sheets={sheets} currency={config.currency} />}
-      {tab === 'calc' && <Calculators currency={config.currency} />}
+      {tab === 'summary' && <Summary ctx={ctx} sheets={sheets} currency={CURRENCY} />}
+      {tab === 'calc' && <Calculators currency={CURRENCY} />}
       {tab === 'settings' && (
         <Settings
           config={config}

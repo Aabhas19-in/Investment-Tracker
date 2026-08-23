@@ -1,5 +1,4 @@
 import { useCallback, useSyncExternalStore } from 'react';
-import type { CurrencyCode } from './format';
 
 /**
  * The only thing this app persists locally: which spreadsheet to open, which
@@ -13,7 +12,6 @@ export interface AppConfig {
   /** Separate workbook for the Expenses tab — kept apart from investments on purpose. */
   expensesSpreadsheetId: string;
   clientId: string;
-  currency: CurrencyCode;
   theme: ThemePref;
   /** Sheet title -> column headers whose total you've dismissed. A view preference, not data. */
   hiddenTotals: Record<string, string[]>;
@@ -25,7 +23,6 @@ const defaults: AppConfig = {
   spreadsheetId: import.meta.env.VITE_SPREADSHEET_ID ?? '',
   expensesSpreadsheetId: import.meta.env.VITE_EXPENSES_SPREADSHEET_ID ?? '',
   clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID ?? '',
-  currency: 'INR',
   theme: 'system',
   hiddenTotals: {},
 };

@@ -158,6 +158,28 @@ export const IconReceipt = (p: P) => (
   </Svg>
 );
 
+/**
+ * Sign-in illustration. Flat layered greens rather than gradients, and the
+ * ground shadow uses currentColor so it settles into either theme.
+ */
+export function TreeArt({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 120 124" className={className} fill="none" aria-hidden>
+      <ellipse cx="60" cy="112" rx="31" ry="5" fill="currentColor" opacity="0.09" />
+
+      <path d="M60 113V60" stroke="#8a6a4f" strokeWidth="5.5" strokeLinecap="round" />
+      <path d="M60 88 47 76" stroke="#8a6a4f" strokeWidth="4" strokeLinecap="round" />
+      <path d="M60 79 73 67" stroke="#8a6a4f" strokeWidth="4" strokeLinecap="round" />
+
+      <circle cx="38" cy="57" r="19" fill="#4f8a64" />
+      <circle cx="82" cy="57" r="19" fill="#4f8a64" />
+      <circle cx="60" cy="41" r="27" fill="#5f9c74" />
+      <circle cx="50" cy="32" r="13" fill="#7bb98d" opacity="0.5" />
+      <circle cx="74" cy="47" r="9" fill="#7bb98d" opacity="0.35" />
+    </svg>
+  );
+}
+
 export const IconLogout = (p: P) => (
   <Svg {...p}>
     <path d="M15 5h3a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-3" />

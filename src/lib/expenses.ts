@@ -11,6 +11,13 @@ export const DATE_COLUMN = 'Date';
 export const CATEGORY_COLUMN = 'Category';
 export const AMOUNT_COLUMN = 'Amount';
 
+/**
+ * Categories live in their own tab of the expenses workbook, so the list exists
+ * independently of whether anything has been spent under it yet — and is still
+ * editable straight from Google Sheets.
+ */
+export const CATEGORIES_SHEET = 'Categories';
+
 /** Created on every new month sheet. Date is mandatory and can't be removed. */
 export const EXPENSE_COLUMNS: ColumnSpec[] = [
   { name: DATE_COLUMN, type: 'date' },
