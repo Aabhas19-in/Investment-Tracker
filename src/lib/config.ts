@@ -13,6 +13,8 @@ export interface AppConfig {
   clientId: string;
   currency: CurrencyCode;
   theme: ThemePref;
+  /** Sheet title -> column headers whose total you've dismissed. A view preference, not data. */
+  hiddenTotals: Record<string, string[]>;
 }
 
 const KEY = 'investment-tracker/config';
@@ -22,6 +24,7 @@ const defaults: AppConfig = {
   clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID ?? '',
   currency: 'INR',
   theme: 'system',
+  hiddenTotals: {},
 };
 
 function read(): AppConfig {

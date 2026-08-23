@@ -3,10 +3,11 @@ import type { ColumnSpec, SheetData, SheetMeta } from '../types';
 import { parseNumeric } from '../lib/format';
 import { columnTypeDef, type ColumnType } from '../lib/columnTypes';
 import { accentFor, initials } from '../lib/accent';
-import { sheetUrl } from '../lib/config';
+import { sheetUrl, useConfig } from '../lib/config';
 import { Badge, Button, Empty, IconButton, Sheet, Spinner, inputClass } from './UI';
 import {
   IconCards,
+  IconClose,
   IconDots,
   IconExternal,
   IconPencil,
@@ -78,6 +79,7 @@ export function DataView({
   onRefresh: () => void;
   actions: DataActions;
 }) {
+  const [config, setConfig] = useConfig();
   const [newSheetOpen, setNewSheetOpen] = useState(false);
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -121,6 +123,23 @@ export function DataView({
         })),
     [headers, defs, visible],
   );
+
+  // Dismissed totals are a per-sheet view preference, remembered like the theme.
+  const sheetKey = active?.title ?? '';
+  const hidden = config.hiddenTotals[sheetKey] ?? [];
+  const shownTotals = totals.filter((t) => !hidden.includes(t.header));
+  const hiddenCount = totals.length - shownTotals.length;
+
+  const hideTotal = (header: string) =>
+    setConfig({
+      hiddenTotals: { ...config.hiddenTotals, [sheetKey]: [...hidden, header] },
+    });
+
+  const restoreTotals = () => {
+    const next = { ...config.hiddenTotals };
+    delete next[sheetKey];
+    setConfig({ hiddenTotals: next });
+  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -166,12 +185,19 @@ export function DataView({
         <div className="shrink-0 px-4 pb-3">
           {hasTotals && (
             <div className="scroll-x -mx-4 flex gap-3 px-4 pb-3">
-              {totals.map((t) => (
+              {shownTotals.map((t) => (
                 <div
                   key={t.header}
-                  className="min-w-36 shrink-0 rounded-card bg-surface px-4 py-3 shadow-card"
+                  className="relative min-w-36 shrink-0 rounded-card bg-surface px-4 py-3 shadow-card"
                 >
-                  <p className="truncate text-[0.68rem] font-bold tracking-wider text-muted uppercase">
+                  <button
+                    onClick={() => hideTotal(t.header)}
+                    aria-label={`Hide ${t.header} total`}
+                    className="press absolute top-2 right-2 grid size-6 place-items-center rounded-full bg-surface2 text-muted"
+                  >
+                    <IconClose className="size-3" strokeWidth={2.6} />
+                  </button>
+                  <p className="truncate pr-7 text-[0.68rem] font-bold tracking-wider text-muted uppercase">
                     {t.header}
                   </p>
                   <p className="mt-1 text-lg font-extrabold tabular-nums" style={{ color: accent }}>
@@ -179,6 +205,15 @@ export function DataView({
                   </p>
                 </div>
               ))}
+
+              {hiddenCount > 0 && (
+                <button
+                  onClick={restoreTotals}
+                  className="press shrink-0 self-stretch rounded-card border border-dashed border-line px-4 text-xs font-bold text-muted"
+                >
+                  Show {hiddenCount} hidden
+                </button>
+              )}
             </div>
           )}
 
