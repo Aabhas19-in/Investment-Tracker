@@ -40,12 +40,14 @@ export function Settings({
   onReload: () => void;
 }) {
   const [sheetInput, setSheetInput] = useState(config.spreadsheetId);
+  const [expensesInput, setExpensesInput] = useState(config.expensesSpreadsheetId);
   const [clientInput, setClientInput] = useState(config.clientId);
   const [saved, setSaved] = useState(false);
 
   const save = () => {
     setConfig({
       spreadsheetId: extractSpreadsheetId(sheetInput),
+      expensesSpreadsheetId: extractSpreadsheetId(expensesInput),
       clientId: clientInput.trim(),
     });
     setSaved(true);
@@ -102,6 +104,18 @@ export function Settings({
               value={sheetInput}
               placeholder="https://docs.google.com/spreadsheets/d/…"
               onChange={(e) => setSheetInput(e.target.value)}
+            />
+          </Field>
+
+          <Field
+            label="Expenses spreadsheet"
+            hint="A separate workbook for the Expenses tab, with one sheet per month."
+          >
+            <input
+              className={inputClass}
+              value={expensesInput}
+              placeholder="https://docs.google.com/spreadsheets/d/…"
+              onChange={(e) => setExpensesInput(e.target.value)}
             />
           </Field>
 

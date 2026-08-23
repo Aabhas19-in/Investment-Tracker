@@ -10,6 +10,8 @@ export type ThemePref = 'system' | 'light' | 'dark';
 
 export interface AppConfig {
   spreadsheetId: string;
+  /** Separate workbook for the Expenses tab — kept apart from investments on purpose. */
+  expensesSpreadsheetId: string;
   clientId: string;
   currency: CurrencyCode;
   theme: ThemePref;
@@ -21,6 +23,7 @@ const KEY = 'investment-tracker/config';
 
 const defaults: AppConfig = {
   spreadsheetId: import.meta.env.VITE_SPREADSHEET_ID ?? '',
+  expensesSpreadsheetId: import.meta.env.VITE_EXPENSES_SPREADSHEET_ID ?? '',
   clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID ?? '',
   currency: 'INR',
   theme: 'system',

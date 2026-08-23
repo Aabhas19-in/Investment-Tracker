@@ -200,7 +200,7 @@ export function Summary({
       <p className="mt-5 px-1 text-xs leading-relaxed text-muted">
         Only columns you set to <span className="font-bold text-ink2">Money</span> or{' '}
         <span className="font-bold text-ink2">Number</span> are totalled — change a column’s type
-        under Sheets → ⋯ → Manage columns. The big card appears once a sheet has both an “invested”
+        under Investments → ⋯ → Manage columns. The big card appears once a sheet has both an “invested”
         and a “current value” column.
       </p>
     </div>

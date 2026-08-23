@@ -154,13 +154,18 @@ export async function readSheet(ctx: SheetsCtx, title: string): Promise<SheetDat
 
 /* ----------------------------------------------------------------- writes */
 
+/**
+ * Note the absence of `insertDataOption=INSERT_ROWS`: that would splice in a
+ * brand-new row, which arrives with no column formatting, so dates would render
+ * as raw serial numbers (46257) and money would lose its currency format. The
+ * default OVERWRITE instead fills the next already-formatted blank row.
+ */
 export function appendRow(ctx: SheetsCtx, title: string, values: string[]) {
   const range = encodeURIComponent(`${quoteTitle(title)}!A1`);
-  return call<unknown>(
-    ctx,
-    `/values/${range}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
-    { method: 'POST', body: JSON.stringify({ values: [values] }) },
-  );
+  return call<unknown>(ctx, `/values/${range}:append?valueInputOption=USER_ENTERED`, {
+    method: 'POST',
+    body: JSON.stringify({ values: [values] }),
+  });
 }
 
 /** `dataRowIndex` is 0-based over data rows, i.e. the first row under the header. */

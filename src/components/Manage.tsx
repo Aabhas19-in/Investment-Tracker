@@ -336,6 +336,7 @@ export function ColumnManager({
   headers,
   columnTypes,
   sheetTitle,
+  lockedColumns = [],
   onClose,
   onAdd,
   onRename,
@@ -346,6 +347,8 @@ export function ColumnManager({
   headers: string[];
   columnTypes: ColumnType[];
   sheetTitle: string;
+  /** Column names that can't be renamed, retyped or deleted (e.g. Date on expenses). */
+  lockedColumns?: string[];
   onClose: () => void;
   onAdd: (name: string, type: ColumnType) => Promise<void>;
   onRename: (index: number, name: string) => Promise<void>;
@@ -401,39 +404,50 @@ export function ColumnManager({
         </p>
 
         <ul className="space-y-2">
-          {headers.map((h, i) => (
-            <li key={i} className="flex items-center gap-2">
-              <input
-                className={`${inputClass} py-3`}
-                value={edits[i] ?? h}
-                onChange={(e) => setEdits({ ...edits, [i]: e.target.value })}
-                onBlur={() => {
-                  const next = (edits[i] ?? h).trim();
-                  if (next && next !== h) run(() => onRename(i, next));
-                }}
-              />
-              <div className="w-28 shrink-0">
-                <TypeSelect
-                  value={columnTypes[i] ?? 'text'}
-                  disabled={busy}
-                  onChange={(type) => run(() => onRetype(i, type))}
+          {headers.map((h, i) => {
+            const locked = lockedColumns.some((l) => l.toLowerCase() === h.trim().toLowerCase());
+            return (
+              <li key={i} className="flex items-center gap-2">
+                <input
+                  className={`${inputClass} py-3 ${locked ? 'opacity-60' : ''}`}
+                  value={edits[i] ?? h}
+                  readOnly={locked}
+                  onChange={(e) => setEdits({ ...edits, [i]: e.target.value })}
+                  onBlur={() => {
+                    const next = (edits[i] ?? h).trim();
+                    if (next && next !== h) run(() => onRename(i, next));
+                  }}
                 />
-              </div>
-              {pendingDelete === i ? (
-                <Button variant="danger" disabled={busy} onClick={() => run(() => onDelete(i))}>
-                  Sure?
-                </Button>
-              ) : (
-                <button
-                  onClick={() => setPendingDelete(i)}
-                  aria-label={`Delete ${h}`}
-                  className="press grid size-11 shrink-0 place-items-center rounded-xl bg-surface2 text-muted"
-                >
-                  <IconTrash className="size-4" />
-                </button>
-              )}
-            </li>
-          ))}
+                <div className="w-28 shrink-0">
+                  <TypeSelect
+                    value={columnTypes[i] ?? 'text'}
+                    disabled={busy || locked}
+                    onChange={(type) => run(() => onRetype(i, type))}
+                  />
+                </div>
+                {locked ? (
+                  <span
+                    title={`${h} is required and can't be changed`}
+                    className="grid size-11 shrink-0 place-items-center rounded-xl bg-surface2 text-muted"
+                  >
+                    🔒
+                  </span>
+                ) : pendingDelete === i ? (
+                  <Button variant="danger" disabled={busy} onClick={() => run(() => onDelete(i))}>
+                    Sure?
+                  </Button>
+                ) : (
+                  <button
+                    onClick={() => setPendingDelete(i)}
+                    aria-label={`Delete ${h}`}
+                    className="press grid size-11 shrink-0 place-items-center rounded-xl bg-surface2 text-muted"
+                  >
+                    <IconTrash className="size-4" />
+                  </button>
+                )}
+              </li>
+            );
+          })}
         </ul>
 
         <div className="rounded-2xl border border-dashed border-line p-4">

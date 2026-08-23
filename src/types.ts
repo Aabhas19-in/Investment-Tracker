@@ -24,4 +24,4 @@ export interface ColumnSpec {
   type: ColumnType;
 }
 
-export type Tab = 'data' | 'summary' | 'calc' | 'settings';
+export type Tab = 'data' | 'expenses' | 'summary' | 'calc' | 'settings';
