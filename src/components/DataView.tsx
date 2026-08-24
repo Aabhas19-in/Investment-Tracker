@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import type { ColumnSpec, SheetData, SheetMeta } from '../types';
 import { parseNumeric } from '../lib/format';
-import { columnTypeDef, type ColumnType } from '../lib/columnTypes';
+import { columnTypeDef, isCompleted, type ColumnType } from '../lib/columnTypes';
+import { isPressing, triggerInfo, triggerTone, type TriggerInfo } from '../lib/triggers';
 import { accentFor, initials } from '../lib/accent';
 import { sheetUrl, useConfig } from '../lib/config';
 import { Badge, Button, Empty, IconButton, Sheet, Spinner, inputClass } from './UI';
@@ -13,6 +14,7 @@ import {
   IconPencil,
   IconPlus,
   IconRefresh,
+  IconBell,
   IconSearch,
   IconTable,
   IconTrash,
@@ -47,6 +49,8 @@ function pickHighlights(headers: string[], types: ColumnType[]) {
     return text >= 0 ? text : 0;
   })();
 
+  // Deliberately 'date' and not any date-like column: a trigger date is shown
+  // by its own badge, so leading a card with it would read as the purchase date.
   const date = types.findIndex((t) => t === 'date');
 
   const value = (() => {
@@ -69,6 +73,7 @@ export function DataView({
   onSelect,
   onRefresh,
   actions,
+  reminderCounts,
 }: {
   sheets: SheetMeta[];
   active: SheetMeta | null;
@@ -78,6 +83,8 @@ export function DataView({
   onSelect: (title: string) => void;
   onRefresh: () => void;
   actions: DataActions;
+  /** Pending reminders per sheet title, for the badge on each chip. */
+  reminderCounts: Record<string, number>;
 }) {
   const [config, setConfig] = useConfig();
   const [newSheetOpen, setNewSheetOpen] = useState(false);
@@ -89,6 +96,8 @@ export function DataView({
   const [view, setView] = useState<'cards' | 'table'>('cards');
   const [renameDraft, setRenameDraft] = useState('');
   const [confirmSheetDelete, setConfirmSheetDelete] = useState(false);
+  const [alertsExpanded, setAlertsExpanded] = useState(false);
+  const [showCompleted, setShowCompleted] = useState(false);
 
   const headers = data?.headers ?? [];
   const rows = data?.rows ?? [];
@@ -104,13 +113,84 @@ export function DataView({
     [headers, data],
   );
 
+  const statusCols = useMemo(
+    () =>
+      headers.map((_, i) => i).filter((i) => (data?.columnTypes[i] ?? 'text') === 'status'),
+    [headers, data],
+  );
+
+  /** Ticked-off entries stay in the spreadsheet; they just leave this list. */
+  const isRowCompleted = useMemo(
+    () => (row: string[]) => statusCols.some((i) => isCompleted(row[i] ?? '')),
+    [statusCols],
+  );
+
+  const completedCount = useMemo(
+    () => (statusCols.length === 0 ? 0 : rows.filter(isRowCompleted).length),
+    [rows, statusCols, isRowCompleted],
+  );
+
   // Keep the original row index so edits hit the right sheet row after filtering.
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const indexed = rows.map((row, index) => ({ row, index }));
+    let indexed = rows.map((row, index) => ({ row, index }));
+    if (!showCompleted) indexed = indexed.filter(({ row }) => !isRowCompleted(row));
     if (!q) return indexed;
     return indexed.filter(({ row }) => row.some((c) => c.toLowerCase().includes(q)));
-  }, [rows, query]);
+  }, [rows, query, showCompleted, isRowCompleted]);
+
+  /**
+   * Every trigger date that has arrived or is close, newest deadline first.
+   * The sheet colours these cells too; this is what puts them in front of you
+   * the moment the tab opens.
+   */
+  const alerts = useMemo(() => {
+    const cols = headers
+      .map((_, i) => i)
+      .filter((i) => (data?.columnTypes[i] ?? 'text') === 'trigger');
+    if (cols.length === 0) return [];
+
+    const found: { rowIndex: number; label: string; column: string; info: TriggerInfo }[] = [];
+    rows.forEach((row, rowIndex) => {
+      if (isRowCompleted(row)) return; // done deals stop reminding
+      for (const i of cols) {
+        const info = triggerInfo(row[i]);
+        if (!info || !isPressing(info)) continue;
+        found.push({
+          rowIndex,
+          column: headers[i],
+          info,
+          label: row[highlights.title]?.trim() || `Row ${rowIndex + 2}`,
+        });
+      }
+    });
+    return found.sort((a, b) => a.info.days - b.info.days);
+  }, [rows, headers, data, highlights.title, isRowCompleted]);
+
+  const overdueCount = alerts.filter((a) => a.info.status !== 'soon').length;
+  const soonCount = alerts.length - overdueCount;
+
+  /**
+   * Row index -> its nearest trigger, for the badge on each card. Distant ones
+   * are included too and simply render muted, so a 2028 maturity is visible
+   * from the day you enter it rather than appearing out of nowhere.
+   */
+  const rowTriggers = useMemo(() => {
+    const cols = headers
+      .map((_, i) => i)
+      .filter((i) => (data?.columnTypes[i] ?? 'text') === 'trigger');
+    const map = new Map<number, TriggerInfo>();
+    rows.forEach((row, rowIndex) => {
+      if (isRowCompleted(row)) return;
+      for (const i of cols) {
+        const info = triggerInfo(row[i]);
+        if (!info) continue;
+        const current = map.get(rowIndex);
+        if (!current || info.days < current.days) map.set(rowIndex, info);
+      }
+    });
+    return map;
+  }, [rows, headers, data, isRowCompleted]);
 
   const totals = useMemo(
     () =>
@@ -166,6 +246,18 @@ export function DataView({
                 {initials(s.title)}
               </span>
               {s.title}
+              {Boolean(reminderCounts[s.title]) && (
+                <span
+                  className="grid min-w-5 place-items-center rounded-full px-1.5 text-[0.62rem] font-extrabold"
+                  style={
+                    on
+                      ? { background: 'rgb(255 255 255 / 0.3)', color: '#fff' }
+                      : { background: 'var(--neg)', color: '#fff' }
+                  }
+                >
+                  {reminderCounts[s.title]}
+                </span>
+              )}
             </button>
           );
         })}
@@ -223,7 +315,20 @@ export function DataView({
                   <p className="text-sm font-bold">
                     {visible.length} {visible.length === 1 ? 'entry' : 'entries'}
                   </p>
-                  <p className="text-xs font-medium text-muted">Tap one to edit or delete</p>
+                  <p className="text-xs font-medium text-muted">
+                    Tap one to edit or delete
+                    {completedCount > 0 && (
+                      <>
+                        {' · '}
+                        <button
+                          onClick={() => setShowCompleted(!showCompleted)}
+                          className="font-bold text-brand"
+                        >
+                          {showCompleted ? 'hide' : 'show'} {completedCount} completed
+                        </button>
+                      </>
+                    )}
+                  </p>
                 </div>
                 <IconButton label="Search" onClick={() => setSearchOpen(true)}>
                   <IconSearch />
@@ -255,6 +360,64 @@ export function DataView({
 
       {/* Entries */}
       <div className="min-h-0 flex-1 overflow-y-auto">
+        {alerts.length > 0 && (
+          <div className="animate-rise mx-4 mb-3 overflow-hidden rounded-card border border-line bg-surface shadow-card">
+            <div className="flex items-center gap-2 border-b border-line px-4 py-2.5">
+              <IconBell className="size-4 text-neg" />
+              <p className="text-[0.7rem] font-extrabold tracking-widest text-muted uppercase">
+                {alerts.length} {alerts.length === 1 ? 'reminder' : 'reminders'}
+              </p>
+              <span className="ml-auto flex items-center gap-1.5">
+                {overdueCount > 0 && (
+                  <span className="rounded-full bg-neg/12 px-2 py-0.5 text-[0.68rem] font-extrabold text-neg">
+                    {overdueCount} due
+                  </span>
+                )}
+                {soonCount > 0 && (
+                  <span
+                    className="rounded-full px-2 py-0.5 text-[0.68rem] font-extrabold"
+                    style={{ color: '#b4740f', background: 'color-mix(in srgb, #e8992b 16%, transparent)' }}
+                  >
+                    {soonCount} soon
+                  </span>
+                )}
+              </span>
+            </div>
+            <ul>
+              {(alertsExpanded ? alerts : alerts.slice(0, 5)).map((a, i) => {
+                const tone = triggerTone(a.info.status);
+                return (
+                  <li
+                    key={`${a.rowIndex}-${a.column}-${i}`}
+                    onClick={() => setEditing(a.rowIndex)}
+                    className={`flex cursor-pointer items-center gap-3 px-4 py-3 active:bg-surface2 ${
+                      i > 0 ? 'border-t border-line' : ''
+                    }`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-bold">{a.label}</p>
+                      <p className="truncate text-xs font-medium text-muted">{a.column}</p>
+                    </div>
+                    <span
+                      className="shrink-0 rounded-full px-2.5 py-1 text-xs font-extrabold"
+                      style={{ color: tone.fg, background: tone.bg }}
+                    >
+                      {a.info.status === 'passed' ? 'Due' : ''} {a.info.label}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+            {alerts.length > 5 && (
+              <button
+                onClick={() => setAlertsExpanded(!alertsExpanded)}
+                className="press w-full border-t border-line px-4 py-2.5 text-xs font-bold text-brand"
+              >
+                {alertsExpanded ? 'Show less' : `Show all ${alerts.length}`}
+              </button>
+            )}
+          </div>
+        )}
         {loading && !data ? (
           <Spinner label="Reading your sheet…" />
         ) : !active ? (
@@ -295,6 +458,8 @@ export function DataView({
                 defs={defs}
                 highlights={highlights}
                 accent={accent}
+                trigger={rowTriggers.get(index)}
+                completed={isRowCompleted(row)}
                 delay={n}
                 onOpen={() => setEditing(index)}
               />
@@ -482,6 +647,8 @@ function EntryCard({
   defs,
   highlights,
   accent,
+  trigger,
+  completed,
   delay,
   onOpen,
 }: {
@@ -490,6 +657,8 @@ function EntryCard({
   defs: { numeric: boolean }[];
   highlights: { title: number; date: number; value: number };
   accent: string;
+  trigger?: TriggerInfo;
+  completed?: boolean;
   delay: number;
   onOpen: () => void;
 }) {
@@ -507,13 +676,29 @@ function EntryCard({
     <li
       onClick={onOpen}
       style={{ animationDelay: `${Math.min(delay, 8) * 28}ms` }}
-      className="press animate-rise cursor-pointer rounded-card bg-surface p-4 shadow-card"
+      className={`press animate-rise cursor-pointer rounded-card bg-surface p-4 shadow-card ${
+        completed ? 'opacity-60' : ''
+      }`}
     >
       <div className="flex items-start gap-3">
         <Badge text={initials(title)} color={accent} />
         <div className="min-w-0 flex-1">
           <p className="truncate font-bold tracking-tight">{title}</p>
           {date && <p className="mt-0.5 text-xs font-semibold text-muted">{date}</p>}
+          {completed && (
+            <span className="mt-1.5 mr-1.5 inline-flex items-center gap-1 rounded-full bg-pos/12 px-2 py-0.5 text-[0.68rem] font-extrabold text-pos">
+              ✓ Completed
+            </span>
+          )}
+          {trigger && (
+            <span
+              className="mt-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.68rem] font-extrabold"
+              style={{ color: triggerTone(trigger.status).fg, background: triggerTone(trigger.status).bg }}
+            >
+              <IconBell className="size-3" />
+              {trigger.status === 'passed' ? 'Due' : ''} {trigger.label}
+            </span>
+          )}
         </div>
         {value && (
           <div className="text-right">

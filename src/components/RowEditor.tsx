@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react';
-import { columnTypeDef, type ColumnType } from '../lib/columnTypes';
+import {
+  STATUS_DONE,
+  STATUS_OPEN,
+  columnTypeDef,
+  isCompleted,
+  isDateLike,
+  type ColumnType,
+} from '../lib/columnTypes';
 import { parseSheetDate, toISODate, todayISO } from '../lib/dates';
 import { Button, Field, Sheet, inputClass } from './UI';
 import { DateField } from './DateField';
@@ -52,7 +59,12 @@ export function RowEditor({
       headers.map((_, i) => {
         // Every date column opens on today for a new row, and on its own stored
         // date when editing — never on a raw serial number.
-        if ((columnTypes[i] ?? 'text') === 'date') {
+        // A new entry is Ongoing until you tick it.
+        if ((columnTypes[i] ?? 'text') === 'status') {
+          const stored = formulaRow?.[i] ?? '';
+          return isCompleted(stored) ? STATUS_DONE : STATUS_OPEN;
+        }
+        if (isDateLike(columnTypes[i] ?? 'text')) {
           const parsed = parseSheetDate(displayRow?.[i] ?? formulaRow?.[i] ?? '');
           return parsed ? toISODate(parsed) : editing ? '' : todayISO();
         }
@@ -88,9 +100,48 @@ export function RowEditor({
         {headers.map((h, i) => {
           const type = columnTypes[i] ?? 'text';
 
-          if (type === 'date') {
+          if (type === 'status') {
+            const done = isCompleted(values[i] ?? '');
             return (
-              <Field key={`${h}-${i}`} label={h || 'Date'}>
+              <button
+                key={`${h}-${i}`}
+                onClick={() => setAt(i, done ? STATUS_OPEN : STATUS_DONE)}
+                className="press flex w-full items-center gap-3 rounded-2xl border border-line bg-surface px-4 py-3.5 text-left"
+              >
+                <span
+                  className={`grid size-6 shrink-0 place-items-center rounded-lg border-2 transition-colors ${
+                    done ? 'border-pos bg-pos text-white' : 'border-line'
+                  }`}
+                >
+                  {done && (
+                    <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth={3.2} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="m5 13 4 4 10-10" />
+                    </svg>
+                  )}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-bold">{h || 'Completed'}</span>
+                  <span className="block text-xs text-muted">
+                    {done
+                      ? 'Kept in the sheet, hidden from this list'
+                      : 'Ongoing — tick once this is done'}
+                  </span>
+                </span>
+              </button>
+            );
+          }
+
+          if (isDateLike(type)) {
+            return (
+              <Field
+                key={`${h}-${i}`}
+                label={h || 'Date'}
+                hint={
+                  type === 'trigger'
+                    ? 'You’ll be reminded on this tab as the date approaches.'
+                    : undefined
+                }
+              >
                 <DateField value={values[i] ?? ''} onChange={(iso) => setAt(i, iso)} />
               </Field>
             );

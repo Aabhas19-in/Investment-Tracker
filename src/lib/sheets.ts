@@ -5,8 +5,15 @@
  * which is the single source of truth.
  */
 import { getToken, invalidateToken } from './googleAuth';
-import { detectColumnType, numberFormatFor, type ColumnType } from './columnTypes';
+import {
+  STATUS_DONE,
+  STATUS_OPEN,
+  detectColumnType,
+  numberFormatFor,
+  type ColumnType,
+} from './columnTypes';
 import type { CurrencyCode } from './format';
+import { TRIGGER_SOON_DAYS } from './triggers';
 import type { ColumnSpec, SheetData, SheetMeta } from '../types';
 
 const API = 'https://sheets.googleapis.com/v4/spreadsheets';
@@ -77,12 +84,55 @@ function batchUpdate<T = { replies: unknown[] }>(ctx: SheetsCtx, requests: unkno
   });
 }
 
+interface ConditionalFormatRule {
+  ranges?: { startColumnIndex?: number; endColumnIndex?: number }[];
+  booleanRule?: {
+    condition?: { type?: string; values?: { userEnteredValue?: string }[] };
+  };
+}
+
+interface ProbeCell {
+  effectiveFormat?: { numberFormat?: { type?: string } };
+  dataValidation?: {
+    condition?: { type?: string; values?: { userEnteredValue?: string }[] };
+  };
+}
+
 interface FormatProbe {
   sheets?: {
-    data?: {
-      rowData?: { values?: { effectiveFormat?: { numberFormat?: { type?: string } } }[] }[];
-    }[];
+    data?: { rowData?: { values?: ProbeCell[] }[] }[];
+    conditionalFormats?: ConditionalFormatRule[];
   }[];
+}
+
+/**
+ * A status column is marked by its Google Sheets dropdown, so the type lives in
+ * the spreadsheet (and you get a working picker there too) rather than in the app.
+ */
+function isStatusCell(cell?: ProbeCell): boolean {
+  const c = cell?.dataValidation?.condition;
+  if (c?.type !== 'ONE_OF_LIST') return false;
+  return (c.values ?? []).some((v) => v.userEnteredValue === STATUS_DONE);
+}
+
+/** Our trigger rules are the ones comparing a cell against TODAY(). */
+function isTriggerRule(rule: ConditionalFormatRule): boolean {
+  const c = rule.booleanRule?.condition;
+  if (c?.type !== 'CUSTOM_FORMULA') return false;
+  return (c.values ?? []).some((v) => (v.userEnteredValue ?? '').includes('TODAY()'));
+}
+
+function columnsWithTriggerRules(rules: ConditionalFormatRule[]): Set<number> {
+  const cols = new Set<number>();
+  for (const rule of rules) {
+    if (!isTriggerRule(rule)) continue;
+    for (const r of rule.ranges ?? []) {
+      const from = r.startColumnIndex ?? 0;
+      const to = r.endColumnIndex ?? from + 1;
+      for (let i = from; i < to; i++) cols.add(i);
+    }
+  }
+  return cols;
 }
 
 /* ------------------------------------------------------------------ reads */
@@ -126,13 +176,14 @@ export async function readSheet(ctx: SheetsCtx, title: string): Promise<SheetDat
     call<FormatProbe>(
       ctx,
       `?ranges=${encodeURIComponent(`${quoteTitle(title)}!2:2`)}` +
-        `&fields=sheets.data.rowData.values.effectiveFormat.numberFormat.type`,
+        `&fields=sheets(data.rowData.values(effectiveFormat.numberFormat.type,dataValidation),conditionalFormats)`,
     ),
   ]);
 
   const grid = displayed.values ?? [];
   const rawGrid = raw.values ?? [];
   const formatCells = formats.sheets?.[0]?.data?.[0]?.rowData?.[0]?.values ?? [];
+  const triggerCols = columnsWithTriggerRules(formats.sheets?.[0]?.conditionalFormats ?? []);
   const headers = (grid[0] ?? []).map((h) => String(h ?? ''));
   const width = headers.length;
 
@@ -146,9 +197,11 @@ export async function readSheet(ctx: SheetsCtx, title: string): Promise<SheetDat
     headers,
     rows: grid.slice(1).map(pad),
     formulaRows: rawGrid.slice(1).map(pad),
-    columnTypes: headers.map((_, i) =>
-      detectColumnType(formatCells[i]?.effectiveFormat?.numberFormat?.type),
-    ),
+    columnTypes: headers.map((_, i) => {
+      if (isStatusCell(formatCells[i])) return 'status';
+      const base = detectColumnType(formatCells[i]?.effectiveFormat?.numberFormat?.type);
+      return base === 'date' && triggerCols.has(i) ? 'trigger' : base;
+    }),
   };
 }
 
@@ -186,6 +239,88 @@ export function deleteRow(ctx: SheetsCtx, sheetId: number, dataRowIndex: number)
 }
 
 /* -------------------------------------------------------- columns & tabs */
+
+/**
+ * The two conditional-format rules that make a column a "trigger" column.
+ * Google Sheets evaluates these itself, so the cell is coloured in the
+ * spreadsheet too — and their presence is how the app recognises the column
+ * later, which keeps the type in the sheet rather than in the app.
+ */
+function triggerRuleRequests(sheetId: number, colIndex: number, soonDays: number) {
+  const cell = `${colLetter(colIndex)}2`;
+  const range = { sheetId, startRowIndex: 1, startColumnIndex: colIndex, endColumnIndex: colIndex + 1 };
+
+  const rule = (formula: string, bg: [number, number, number], fg: [number, number, number]) => ({
+    addConditionalFormatRule: {
+      index: 0,
+      rule: {
+        ranges: [range],
+        booleanRule: {
+          condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: formula }] },
+          format: {
+            backgroundColor: { red: bg[0], green: bg[1], blue: bg[2] },
+            textFormat: { bold: true, foregroundColor: { red: fg[0], green: fg[1], blue: fg[2] } },
+          },
+        },
+      },
+    },
+  });
+
+  return [
+    // Coming up within the window — amber.
+    rule(
+      `=AND(${cell}<>"", ${cell}>TODAY(), ${cell}<=TODAY()+${soonDays})`,
+      [0.99, 0.91, 0.71],
+      [0.55, 0.35, 0.02],
+    ),
+    // Today or already gone by — red. Added last so it sits on top.
+    rule(`=AND(${cell}<>"", ${cell}<=TODAY())`, [0.97, 0.8, 0.8], [0.6, 0.09, 0.15]),
+  ];
+}
+
+/** Indices of the trigger rules already on a column, so they can be replaced. */
+async function triggerRuleIndices(ctx: SheetsCtx, sheetId: number, colIndex: number) {
+  const data = await call<{
+    sheets?: { properties?: { sheetId?: number }; conditionalFormats?: ConditionalFormatRule[] }[];
+  }>(ctx, '?fields=sheets(properties.sheetId,conditionalFormats)');
+
+  const sheet = data.sheets?.find((s) => s.properties?.sheetId === sheetId);
+  const found: number[] = [];
+  (sheet?.conditionalFormats ?? []).forEach((rule, i) => {
+    if (!isTriggerRule(rule)) return;
+    const hits = (rule.ranges ?? []).some(
+      (r) => (r.startColumnIndex ?? 0) <= colIndex && colIndex < (r.endColumnIndex ?? -1),
+    );
+    if (hits) found.push(i);
+  });
+  return found;
+}
+
+/**
+ * Puts an Ongoing/Completed dropdown on a status column, or strips it when the
+ * column becomes something else. `showCustomUi` is what renders it as a real
+ * picker in Google Sheets instead of a bare warning.
+ */
+function statusValidationRequest(sheetId: number, colIndex: number, on: boolean) {
+  const range = { sheetId, startRowIndex: 1, startColumnIndex: colIndex, endColumnIndex: colIndex + 1 };
+  if (!on) return { setDataValidation: { range } };
+  return {
+    setDataValidation: {
+      range,
+      rule: {
+        condition: {
+          type: 'ONE_OF_LIST',
+          values: [
+            { userEnteredValue: STATUS_OPEN },
+            { userEnteredValue: STATUS_DONE },
+          ],
+        },
+        showCustomUi: true,
+        strict: false,
+      },
+    },
+  };
+}
 
 /**
  * The column type is applied as a number format over every data row (row 2 down),
@@ -238,18 +373,39 @@ export async function addColumn(
     },
   });
   requests.push(formatColumnRequest(sheet.sheetId, atIndex, type, currency));
+  if (type === 'trigger') {
+    requests.push(...triggerRuleRequests(sheet.sheetId, atIndex, TRIGGER_SOON_DAYS));
+  }
+  if (type === 'status') {
+    requests.push(statusValidationRequest(sheet.sheetId, atIndex, true));
+  }
   await batchUpdate(ctx, requests);
 }
 
-/** Changes an existing column's type in place. */
-export function setColumnType(
+/**
+ * Changes an existing column's type in place, adding or removing the trigger
+ * highlighting to match. Old rules are dropped highest-index-first, since each
+ * delete shifts the ones after it.
+ */
+export async function setColumnType(
   ctx: SheetsCtx,
   sheetId: number,
   colIndex: number,
   type: ColumnType,
   currency: CurrencyCode,
 ) {
-  return batchUpdate(ctx, [formatColumnRequest(sheetId, colIndex, type, currency)]);
+  const requests: unknown[] = [formatColumnRequest(sheetId, colIndex, type, currency)];
+
+  const stale = await triggerRuleIndices(ctx, sheetId, colIndex);
+  for (const index of stale.sort((a, b) => b - a)) {
+    requests.push({ deleteConditionalFormatRule: { sheetId, index } });
+  }
+  if (type === 'trigger') {
+    requests.push(...triggerRuleRequests(sheetId, colIndex, TRIGGER_SOON_DAYS));
+  }
+  requests.push(statusValidationRequest(sheetId, colIndex, type === 'status'));
+
+  return batchUpdate(ctx, requests);
 }
 
 export function renameColumn(ctx: SheetsCtx, title: string, colIndex: number, name: string) {
@@ -308,6 +464,12 @@ export async function addSheet(
         },
       },
       ...columns.map((c, i) => formatColumnRequest(sheetId, i, c.type, currency)),
+      ...columns.flatMap((c, i) =>
+        c.type === 'trigger' ? triggerRuleRequests(sheetId, i, TRIGGER_SOON_DAYS) : [],
+      ),
+      ...columns.flatMap((c, i) =>
+        c.type === 'status' ? [statusValidationRequest(sheetId, i, true)] : [],
+      ),
     ]);
   }
 }

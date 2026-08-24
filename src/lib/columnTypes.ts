@@ -5,7 +5,21 @@ import { CURRENCIES, type CurrencyCode } from './format';
  * not in the app. So it survives everywhere, shows up correctly when you open
  * the sheet in Google Sheets, and there is still nothing for this app to persist.
  */
-export type ColumnType = 'text' | 'number' | 'currency' | 'percent' | 'date';
+export type ColumnType =
+  | 'text'
+  | 'number'
+  | 'currency'
+  | 'percent'
+  | 'date'
+  | 'trigger'
+  | 'status';
+
+/** The only two values a status column ever holds, as plain text in the sheet. */
+export const STATUS_DONE = 'Completed';
+export const STATUS_OPEN = 'Ongoing';
+
+export const isCompleted = (value: string) =>
+  (value ?? '').trim().toLowerCase() === STATUS_DONE.toLowerCase();
 
 export interface ColumnTypeDef {
   id: ColumnType;
@@ -22,8 +36,25 @@ export const COLUMN_TYPES: ColumnTypeDef[] = [
   { id: 'currency', label: 'Money', blurb: 'Amounts — added up in the totals row', totals: true, numeric: true },
   { id: 'number', label: 'Number', blurb: 'Quantity, units, grams — added up too', totals: true, numeric: true },
   { id: 'percent', label: 'Percent', blurb: 'Rates and returns — not added up', totals: false, numeric: true },
-  { id: 'date', label: 'Date', blurb: 'Purchase date, maturity date', totals: false, numeric: false },
+  { id: 'date', label: 'Date', blurb: 'Purchase date, bought on', totals: false, numeric: false },
+  {
+    id: 'trigger',
+    label: 'Trigger',
+    blurb: 'A date to be reminded about — maturity, renewal, lock-in ending',
+    totals: false,
+    numeric: false,
+  },
+  {
+    id: 'status',
+    label: 'Completed',
+    blurb: 'A tick box — ticked entries drop out of the list but stay in the sheet',
+    totals: false,
+    numeric: false,
+  },
 ];
+
+/** Trigger columns hold a date, so they get the same picker and parsing. */
+export const isDateLike = (type: ColumnType) => type === 'date' || type === 'trigger';
 
 export const columnTypeDef = (type: ColumnType) =>
   COLUMN_TYPES.find((t) => t.id === type) ?? COLUMN_TYPES[0];
@@ -48,6 +79,7 @@ export function numberFormatFor(type: ColumnType, currency: CurrencyCode): Numbe
     case 'percent':
       return { type: 'PERCENT', pattern: '0.00%' };
     case 'date':
+    case 'trigger':
       return { type: 'DATE', pattern: 'dd-mmm-yyyy' };
     case 'text':
     default:
@@ -55,7 +87,11 @@ export function numberFormatFor(type: ColumnType, currency: CurrencyCode): Numbe
   }
 }
 
-/** Reads a column's type back from whatever number format the sheet reports. */
+/**
+ * Reads a column's type back from whatever number format the sheet reports.
+ * A trigger column looks identical to a date here — the caller upgrades it once
+ * it sees the conditional-formatting rules that mark it.
+ */
 export function detectColumnType(apiType?: string): ColumnType {
   switch (apiType) {
     case 'CURRENCY':

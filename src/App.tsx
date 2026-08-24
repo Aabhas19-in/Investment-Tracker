@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { SheetData, SheetMeta, Tab } from './types';
 import { useConfig } from './lib/config';
 import { CURRENCY } from './lib/format';
 import { isSignedIn, onAuthChange, signIn } from './lib/googleAuth';
 import * as api from './lib/sheets';
+import { countPressing } from './lib/triggers';
 import { Banner, Button } from './components/UI';
 import {
   IconChart,
@@ -50,6 +51,7 @@ export default function App() {
   const [data, setData] = useState<SheetData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [triggerCounts, setTriggerCounts] = useState<Record<string, number>>({});
 
   const ctx: api.SheetsCtx = { clientId: config.clientId, spreadsheetId: config.spreadsheetId };
   const active = sheets.find((s) => s.title === activeTitle) ?? null;
@@ -109,6 +111,44 @@ export default function App() {
   useEffect(() => {
     void loadData(activeTitle);
   }, [activeTitle, loadData]);
+
+  /**
+   * Reminder counts for the sheets you are not currently looking at, so each
+   * tab can badge itself. Runs quietly in the background whenever the sheet
+   * list changes; the open sheet's count is recomputed live just below.
+   */
+  const sheetKey = sheets.map((x) => x.title).join('|');
+  useEffect(() => {
+    if (!signedIn || !configured || sheets.length === 0) return;
+    let cancelled = false;
+
+    void (async () => {
+      const counts: Record<string, number> = {};
+      for (const sheet of sheets) {
+        if (cancelled) return;
+        try {
+          const d = await api.readSheet(ctx, sheet.title);
+          counts[sheet.title] = countPressing(d.rows, d.columnTypes);
+        } catch {
+          /* a sheet we cannot read simply gets no badge */
+        }
+      }
+      if (!cancelled) setTriggerCounts(counts);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signedIn, configured, sheetKey, config.clientId, config.spreadsheetId]);
+
+  /** The open sheet is authoritative, so its badge reflects the latest read. */
+  const liveCounts = useMemo(() => {
+    if (!activeTitle || !data) return triggerCounts;
+    return { ...triggerCounts, [activeTitle]: countPressing(data.rows, data.columnTypes) };
+  }, [triggerCounts, activeTitle, data]);
+
+  const totalReminders = Object.values(liveCounts).reduce((a, b) => a + b, 0);
 
   /** Wraps a mutation so it always ends with fresh data pulled back from the sheet. */
   const mutate = async (
@@ -230,6 +270,7 @@ export default function App() {
     <Shell
       tab={tab}
       setTab={setTab}
+      badges={{ data: totalReminders }}
       header={
         <div className="flex items-end justify-between gap-3 px-4 pt-3 pb-1">
           <div className="min-w-0">
@@ -260,6 +301,7 @@ export default function App() {
           onSelect={setActiveTitle}
           onRefresh={() => void loadData(activeTitle)}
           actions={actions}
+          reminderCounts={liveCounts}
         />
       )}
       {tab === 'expenses' && (
@@ -287,12 +329,15 @@ function Shell({
   header,
   tab,
   setTab,
+  badges,
   hideNav,
 }: {
   children: ReactNode;
   header?: ReactNode;
   tab: Tab;
   setTab: (t: Tab) => void;
+  /** Unread-style counts per tab, e.g. pending investment reminders. */
+  badges?: Partial<Record<Tab, number>>;
   hideNav?: boolean;
 }) {
   return (
@@ -321,11 +366,16 @@ function Shell({
                   className="press flex flex-col items-center gap-1 rounded-2xl py-2"
                 >
                   <span
-                    className={`grid h-8 w-14 place-items-center rounded-full transition-colors ${
+                    className={`relative grid h-8 w-14 place-items-center rounded-full transition-colors ${
                       on ? 'bg-brandsoft text-brand' : 'text-muted'
                     }`}
                   >
                     <Icon className="size-5" strokeWidth={on ? 2.3 : 1.9} />
+                    {Boolean(badges?.[t.id]) && (
+                      <span className="absolute top-0 right-2.5 grid min-w-4 place-items-center rounded-full bg-neg px-1 text-[0.58rem] font-extrabold text-white">
+                        {badges![t.id]}
+                      </span>
+                    )}
                   </span>
                   <span
                     className={`text-[0.64rem] leading-none font-bold tracking-tight ${

@@ -143,6 +143,13 @@ export const IconSparkle = (p: P) => (
   </Svg>
 );
 
+export const IconBell = (p: P) => (
+  <Svg {...p}>
+    <path d="M18 15V10a6 6 0 1 0-12 0v5l-1.6 2.2a.6.6 0 0 0 .5 1h14.2a.6.6 0 0 0 .5-1z" />
+    <path d="M9.5 21a2.6 2.6 0 0 0 5 0" />
+  </Svg>
+);
+
 export const IconReceipt = (p: P) => (
   <Svg {...p}>
     <path d="M6 3.5 7.7 5l1.8-1.5L11.3 5 13 3.5 14.8 5l1.7-1.5V19a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2z" />
