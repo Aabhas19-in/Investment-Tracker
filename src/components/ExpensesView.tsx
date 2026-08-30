@@ -50,6 +50,7 @@ export function ExpensesView({
   const [moreOpen, setMoreOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [filter, setFilter] = useState<string | null>(null);
+  const [showSummary, setShowSummary] = useState(false);
 
   // The Categories tab isn't a month, so it never appears in the month switcher.
   const months = useMemo(
@@ -122,6 +123,7 @@ export function ExpensesView({
   useEffect(() => {
     void loadData(activeTitle);
     setFilter(null);
+    setShowSummary(false);
   }, [activeTitle, loadData]);
 
   const mutate = async (fn: () => Promise<unknown>, opts: { relist?: string | true } = {}) => {
@@ -308,8 +310,20 @@ export function ExpensesView({
               {shown.length} {shown.length === 1 ? 'expense' : 'expenses'}
             </p>
 
-            {/* The split lives inside the total card, not in a card of its own. */}
-            {categoryTotals.length > 0 && (
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <span className="text-[0.68rem] font-bold tracking-wider text-white/70 uppercase">
+                Monthly breakdown
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowSummary((v) => !v)}
+                className="press text-[0.68rem] font-bold tracking-wider text-white/75 uppercase"
+              >
+                {showSummary ? 'Hide summary' : 'View summary'}
+              </button>
+            </div>
+
+            {showSummary && categoryTotals.length > 0 && (
               <CategoryBubbles
                 totals={categoryTotals}
                 grandTotal={categoryTotals.reduce((s, [, v]) => s + v, 0)}
