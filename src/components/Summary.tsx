@@ -6,6 +6,7 @@ import { columnTypeDef } from '../lib/columnTypes';
 import { accentFor, initials } from '../lib/accent';
 import { Badge, Banner, Button, Empty, Spinner } from './UI';
 import { IconArrowDown, IconArrowUp, IconRefresh } from './Icons';
+import { ExpenseSummary } from './ExpenseSummary';
 
 interface SheetSummary {
   title: string;
@@ -33,7 +34,7 @@ function pickColumn(headers: string[], patterns: RegExp[]): number {
 const INVESTED = [/amount\s*invested/i, /^invested/i, /invest/i, /principal/i, /cost/i, /buy\s*value/i];
 const CURRENT = [/current\s*value/i, /^value$/i, /market\s*value/i, /maturity\s*amount/i, /present\s*value/i];
 
-export function Summary({
+function InvestmentSummary({
   ctx,
   sheets,
   currency,
@@ -105,7 +106,7 @@ export function Summary({
   if (loading && !rows) return <Spinner label="Adding up your sheets…" />;
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28">
+    <div className="px-4 pb-28">
       {error && <Banner kind="error">{error}</Banner>}
 
       {rows?.length === 0 && (
@@ -208,6 +209,67 @@ export function Summary({
         under Investments → ⋯ → Manage columns. The big card appears once a sheet has both an “invested”
         and a “current value” column.
       </p>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ shell */
+
+const VIEWS = [
+  { id: 'investments', label: 'Investments' },
+  { id: 'expenses', label: 'Expenses' },
+] as const;
+
+type View = (typeof VIEWS)[number]['id'];
+
+export function Summary({
+  ctx,
+  sheets,
+  currency,
+  expensesSpreadsheetId,
+  clientId,
+}: {
+  ctx: SheetsCtx;
+  sheets: SheetMeta[];
+  currency: CurrencyCode;
+  expensesSpreadsheetId: string;
+  clientId: string;
+}) {
+  const [view, setView] = useState<View>('investments');
+
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="px-4 pt-1 pb-4">
+        <div className="flex gap-1 rounded-2xl border border-line bg-surface p-1">
+          {VIEWS.map((v) => (
+            <button
+              key={v.id}
+              onClick={() => setView(v.id)}
+              className={`press flex-1 rounded-xl py-2.5 text-sm font-bold transition-colors ${
+                view === v.id
+                  ? v.id === 'expenses'
+                    ? 'bg-expense text-white'
+                    : 'bg-brand text-onbrand'
+                  : 'text-muted'
+              }`}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {view === 'investments' ? (
+        <InvestmentSummary ctx={ctx} sheets={sheets} currency={currency} />
+      ) : (
+        <div className="px-4 pb-28">
+          <ExpenseSummary
+            spreadsheetId={expensesSpreadsheetId}
+            clientId={clientId}
+            currency={currency}
+          />
+        </div>
+      )}
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SheetData, SheetMeta } from '../types';
 import * as api from '../lib/sheets';
 import type { ColumnType } from '../lib/columnTypes';
-import { makeFormatters, parseNumeric, type CurrencyCode, type Formatters } from '../lib/format';
+import { makeFormatters, parseNumeric, type CurrencyCode } from '../lib/format';
 import { sheetUrl } from '../lib/config';
 import { accentFor } from '../lib/accent';
 import {
@@ -50,7 +50,7 @@ export function ExpensesView({
   const [moreOpen, setMoreOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [filter, setFilter] = useState<string | null>(null);
-  const [showSummary, setShowSummary] = useState(false);
+  const [rowFormulas, setRowFormulas] = useState<string[] | null>(null);
 
   // The Categories tab isn't a month, so it never appears in the month switcher.
   const months = useMemo(
@@ -123,8 +123,23 @@ export function ExpensesView({
   useEffect(() => {
     void loadData(activeTitle);
     setFilter(null);
-    setShowSummary(false);
   }, [activeTitle, loadData]);
+
+  // Formulas are pulled per row rather than for the whole grid, which keeps a
+  // sheet load to two API calls instead of three.
+  useEffect(() => {
+    if (typeof editing !== 'number' || !active) return setRowFormulas(null);
+    let dead = false;
+    setRowFormulas(null);
+    void api
+      .readRowFormulas(ctx, active.title, editing, data?.headers.length ?? 0)
+      .then((r) => !dead && setRowFormulas(r))
+      .catch(() => {});
+    return () => {
+      dead = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing, active?.title]);
 
   const mutate = async (fn: () => Promise<unknown>, opts: { relist?: string | true } = {}) => {
     setError(null);
@@ -191,12 +206,6 @@ export function ExpensesView({
 
   const shown = filter ? entries.filter((e) => e.category === filter) : entries;
   const monthTotal = shown.reduce((s, e) => s + e.amount, 0);
-
-  const categoryTotals = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const e of entries) map.set(e.category || '—', (map.get(e.category || '—') ?? 0) + e.amount);
-    return [...map.entries()].sort((a, b) => b[1] - a[1]);
-  }, [entries]);
 
   /** Newest day first — the shape a day-to-day expense log actually wants. */
   const byDay = useMemo(() => {
@@ -310,28 +319,6 @@ export function ExpensesView({
               {shown.length} {shown.length === 1 ? 'expense' : 'expenses'}
             </p>
 
-            <div className="mt-3 flex items-center justify-between gap-3">
-              <span className="text-[0.68rem] font-bold tracking-wider text-white/70 uppercase">
-                Monthly breakdown
-              </span>
-              <button
-                type="button"
-                onClick={() => setShowSummary((v) => !v)}
-                className="press text-[0.68rem] font-bold tracking-wider text-white/75 uppercase"
-              >
-                {showSummary ? 'Hide summary' : 'View summary'}
-              </button>
-            </div>
-
-            {showSummary && categoryTotals.length > 0 && (
-              <CategoryBubbles
-                totals={categoryTotals}
-                grandTotal={categoryTotals.reduce((s, [, v]) => s + v, 0)}
-                selected={filter}
-                fmt={fmt}
-                onSelect={(name) => setFilter(filter === name ? null : name)}
-              />
-            )}
           </div>
 
           <div className="mt-3 flex items-center gap-2">
@@ -512,7 +499,7 @@ export function ExpensesView({
           sheetTitle={active.title}
           accent={ACCENT}
           displayRow={typeof editing === 'number' ? (rows[editing] ?? []) : null}
-          formulaRow={typeof editing === 'number' ? (data?.formulaRows[editing] ?? []) : null}
+          formulaRow={typeof editing === 'number' ? (rowFormulas ?? rows[editing] ?? []) : null}
           onClose={() => setEditing(null)}
           onSave={async (values) => {
             if (typeof editing === 'number') {
@@ -596,88 +583,6 @@ export function ExpensesView({
           </div>
         </Sheet>
       )}
-    </div>
-  );
-}
-
-/**
- * Spend per category as circles. Area — not diameter — is proportional to the
- * amount, so the eye reads the split correctly: hence the sqrt on the radius.
- */
-function CategoryBubbles({
-  totals,
-  grandTotal,
-  selected,
-  fmt,
-  onSelect,
-}: {
-  totals: [string, number][];
-  grandTotal: number;
-  selected: string | null;
-  fmt: Formatters;
-  onSelect: (name: string) => void;
-}) {
-  // Uniform bubbles: the percentage on each one carries the comparison instead.
-  const SIZE = 100;
-
-  return (
-    <div className="mt-5 border-t border-white/20 pt-4">
-      <div className="flex items-baseline justify-between">
-        <h3 className="text-[0.65rem] font-extrabold tracking-widest text-white/70 uppercase">
-          Where it went
-        </h3>
-        {selected && (
-          <button
-            onClick={() => onSelect(selected)}
-            className="press text-xs font-bold text-white/90 underline underline-offset-2"
-          >
-            Clear filter
-          </button>
-        )}
-      </div>
-
-      <div className="mt-3.5 flex flex-wrap items-center justify-center gap-2.5">
-        {totals.map(([name, value], i) => {
-          const color = accentFor(name);
-          const share = grandTotal > 0 ? Math.round((value / grandTotal) * 100) : 0;
-          const on = selected === name;
-          const amount = fmt.money(value);
-
-          // The full amount has to fit inside a circle, so step the type down
-          // as the number gets longer rather than truncating it.
-          const amountSize = amount.length > 11 ? 0.6 : amount.length > 8 ? 0.7 : 0.82;
-
-          return (
-            <button
-              key={name}
-              onClick={() => onSelect(name)}
-              title={`${name} · ${amount} · ${share}%`}
-              style={{
-                width: SIZE,
-                height: SIZE,
-                animationDelay: `${Math.min(i, 8) * 40}ms`,
-                background: on ? '#fff' : 'rgb(255 255 255 / 0.92)',
-                boxShadow: on ? '0 0 0 3px rgb(255 255 255 / 0.55)' : undefined,
-                color,
-              }}
-              className="press animate-rise flex shrink-0 flex-col items-center justify-center gap-0.5 rounded-full px-2.5 text-center"
-            >
-              <span className="w-full truncate text-[0.64rem] font-bold">{name}</span>
-              <span
-                className="w-full font-extrabold tabular-nums"
-                style={{ fontSize: `${amountSize}rem` }}
-              >
-                {amount}
-              </span>
-              <span className="text-[0.6rem] font-bold tabular-nums opacity-65">{share}%</span>
-            </button>
-          );
-        })}
-      </div>
-
-      <p className="mt-3.5 text-center text-[0.68rem] font-medium text-white/70">
-        Tap a category to filter this month
-      </p>
     </div>
   );
 }

@@ -185,6 +185,8 @@ export default function App() {
     addRow: (values) => mutate(() => api.appendRow(ctx, active!.title, values)),
     updateRow: (index, values) => mutate(() => api.updateRow(ctx, active!.title, index, values)),
     deleteRow: (index) => mutate(() => api.deleteRow(ctx, active!.sheetId, index)),
+    readFormulas: (index) =>
+      api.readRowFormulas(ctx, active!.title, index, data?.headers.length ?? 0),
   };
 
   if (!configured) {
@@ -311,7 +313,15 @@ export default function App() {
           currency={CURRENCY}
         />
       )}
-      {tab === 'summary' && <Summary ctx={ctx} sheets={sheets} currency={CURRENCY} />}
+      {tab === 'summary' && (
+        <Summary
+          ctx={ctx}
+          sheets={sheets}
+          currency={CURRENCY}
+          expensesSpreadsheetId={config.expensesSpreadsheetId}
+          clientId={config.clientId}
+        />
+      )}
       {tab === 'settings' && (
         <Settings
           config={config}

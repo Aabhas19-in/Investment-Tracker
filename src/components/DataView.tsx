@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ColumnSpec, SheetData, SheetMeta } from '../types';
 import { parseNumeric } from '../lib/format';
 import { columnTypeDef, isCompleted, type ColumnType } from '../lib/columnTypes';
@@ -33,6 +33,8 @@ export interface DataActions {
   addRow(values: string[]): Promise<void>;
   updateRow(index: number, values: string[]): Promise<void>;
   deleteRow(index: number): Promise<void>;
+  /** Raw contents of one row, fetched only when it is opened for editing. */
+  readFormulas(index: number): Promise<string[]>;
 }
 
 /**
@@ -98,9 +100,26 @@ export function DataView({
   const [confirmSheetDelete, setConfirmSheetDelete] = useState(false);
   const [alertsExpanded, setAlertsExpanded] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
+  const [rowFormulas, setRowFormulas] = useState<string[] | null>(null);
 
   const headers = data?.headers ?? [];
   const rows = data?.rows ?? [];
+
+  // Formulas are pulled per row rather than for the whole grid, which keeps a
+  // sheet load to two API calls instead of three.
+  useEffect(() => {
+    if (typeof editing !== 'number') return setRowFormulas(null);
+    let dead = false;
+    setRowFormulas(null);
+    void actions
+      .readFormulas(editing)
+      .then((r) => !dead && setRowFormulas(r))
+      .catch(() => {});
+    return () => {
+      dead = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing]);
   const accent = accentFor(active?.title ?? '');
 
   const defs = useMemo(
@@ -557,7 +576,7 @@ export function DataView({
         accent={accent}
         rowNumber={typeof editing === 'number' ? editing + 2 : rows.length + 2}
         displayRow={typeof editing === 'number' ? (rows[editing] ?? []) : null}
-        formulaRow={typeof editing === 'number' ? (data?.formulaRows[editing] ?? []) : null}
+        formulaRow={typeof editing === 'number' ? (rowFormulas ?? rows[editing] ?? []) : null}
         onClose={() => setEditing(null)}
         onSave={async (values) => {
           if (typeof editing === 'number') await actions.updateRow(editing, values);
