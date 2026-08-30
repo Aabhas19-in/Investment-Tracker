@@ -11,11 +11,44 @@ import { parseSheetDate, toISODate, todayISO } from '../lib/dates';
 import { Button, Field, Sheet, inputClass } from './UI';
 import { DateField } from './DateField';
 import { IconTrash } from './Icons';
+import { InvestmentTypeSelector, type InvestmentType } from './InvestmentTypeSelector';
 
 /** The keyboard that suits each column type — small thing, big deal on a phone. */
 function inputModeFor(type: ColumnType): 'decimal' | 'text' {
   return type === 'currency' || type === 'number' || type === 'percent' ? 'decimal' : 'text';
 }
+
+/**
+ * Provide contextual hints for fields based on investment type.
+ */
+function getFieldHint(fieldName: string, investmentType: InvestmentType): string | undefined {
+  const lowerName = fieldName.toLowerCase();
+
+  if (investmentType === 'sip') {
+    if (/monthly|amount|installment|payment|contribution/.test(lowerName)) {
+      return '📊 For SIP: Enter your regular monthly investment amount';
+    }
+    if (/duration|months|tenure|period/.test(lowerName)) {
+      return '📊 For SIP: Number of months you plan to invest';
+    }
+    if (/start|begin|from date/.test(lowerName)) {
+      return '📊 For SIP: Date when you start making regular investments';
+    }
+  } else {
+    if (/amount|principal|invested|investment/.test(lowerName)) {
+      return '💰 For Lump Sum: The total amount you invested at once';
+    }
+    if (/date|purchase|invested.*date/.test(lowerName)) {
+      return '💰 For Lump Sum: The date of your single investment';
+    }
+    if (/maturity|end|mature.*date/.test(lowerName)) {
+      return '💰 For Lump Sum: When your investment matures or is due';
+    }
+  }
+
+  return undefined;
+}
+
 
 /**
  * Add / edit one row. Values are sent with USER_ENTERED, so anything starting
@@ -50,8 +83,15 @@ export function RowEditor({
   const [values, setValues] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [investmentType, setInvestmentType] = useState<InvestmentType>('lump-sum');
 
   const editing = formulaRow !== null;
+
+  // Detect if there's an "Investment Type" column
+  const investmentTypeColIndex = headers.findIndex(
+    (h) => /investment.?type|type.?investment/i.test(h),
+  );
+  const hasInvestmentTypeColumn = investmentTypeColIndex >= 0;
 
   useEffect(() => {
     if (!open) return;
@@ -72,7 +112,17 @@ export function RowEditor({
       }),
     );
     setConfirmDelete(false);
-  }, [open, headers, columnTypes, displayRow, formulaRow, editing]);
+
+    // Initialize investment type from existing value or default to lump-sum
+    if (hasInvestmentTypeColumn && formulaRow) {
+      const stored = formulaRow[investmentTypeColIndex] ?? '';
+      if (stored.toLowerCase().includes('sip')) {
+        setInvestmentType('sip');
+      } else if (stored.toLowerCase().includes('lump')) {
+        setInvestmentType('lump-sum');
+      }
+    }
+  }, [open, headers, columnTypes, displayRow, formulaRow, editing, hasInvestmentTypeColumn, investmentTypeColIndex]);
 
   const setAt = (i: number, v: string) =>
     setValues((prev) => {
@@ -80,6 +130,14 @@ export function RowEditor({
       next[i] = v;
       return next;
     });
+
+  const handleInvestmentTypeChange = (type: InvestmentType) => {
+    setInvestmentType(type);
+    if (hasInvestmentTypeColumn) {
+      const displayName = type === 'sip' ? 'SIP' : 'Lump Sum';
+      setAt(investmentTypeColIndex, displayName);
+    }
+  };
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -97,8 +155,21 @@ export function RowEditor({
           <p className="text-sm text-muted">This sheet has no columns yet. Add one first.</p>
         )}
 
+        {/* Investment Type Selector - show if column exists or always show it as helper */}
+        {headers.length > 0 && (
+          <InvestmentTypeSelector value={investmentType} onChange={handleInvestmentTypeChange} />
+        )}
+
         {headers.map((h, i) => {
           const type = columnTypes[i] ?? 'text';
+
+          // Skip the investment type column if it exists - we handle it above
+          if (hasInvestmentTypeColumn && i === investmentTypeColIndex) {
+            return null;
+          }
+
+          // Determine if this field is relevant to the selected investment type
+          const fieldHint = getFieldHint(h, investmentType);
 
           if (type === 'status') {
             const done = isCompleted(values[i] ?? '');
@@ -137,9 +208,10 @@ export function RowEditor({
                 key={`${h}-${i}`}
                 label={h || 'Date'}
                 hint={
-                  type === 'trigger'
-                    ? 'You’ll be reminded on this tab as the date approaches.'
-                    : undefined
+                  fieldHint ||
+                  (type === 'trigger'
+                    ? "You'll be reminded on this tab as the date approaches."
+                    : undefined)
                 }
               >
                 <DateField value={values[i] ?? ''} onChange={(iso) => setAt(i, iso)} />
@@ -148,7 +220,7 @@ export function RowEditor({
           }
 
           return (
-            <Field key={`${h}-${i}`} label={h || `Column ${i + 1}`}>
+            <Field key={`${h}-${i}`} label={h || `Column ${i + 1}`} hint={fieldHint}>
               <div className="relative">
                 <input
                   className={inputClass}

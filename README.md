@@ -11,6 +11,7 @@ Two separate workbooks: one for investments, one for expenses.
 - Add, edit and delete rows; values starting with `=` become live spreadsheet formulas
 - Column types (Text / Money / Number / Percent / Date) stored as the sheet's own number format
 - A Summary tab that totals your Money and Number columns and spots invested vs current value
+- **Investment Type Selection**: When adding or editing an investment, select between **Lump Sum** (single investment) or **SIP** (Systematic Investment Plan) for contextual field hints
 
 **Expenses**
 
@@ -88,6 +89,45 @@ Your sheet is already fine as-is:
 One thing worth doing: if that link is currently shared publicly, **turn sharing back off**.
 A publicly editable sheet is editable by anyone who finds the link, and your investment records
 probably shouldn't be.
+
+---
+
+## 2b. Investment Type: Lump Sum vs SIP
+
+When adding or editing an investment entry, you'll see an **Investment Type selector** at the top of the form. This helps you organize your data correctly:
+
+### Lump Sum Investments
+Single investments made all at once. Best for:
+- Fixed deposits
+- One-time mutual fund purchases
+- Bonds
+- Real estate down payments
+
+**Recommended columns:**
+- Fund/Stock Name (Text)
+- Amount Invested (Currency)
+- Investment Date (Date)
+- Current Value (Currency)
+- Maturity Date (Date)
+- Expected Return % (Percent)
+
+### SIP (Systematic Investment Plan)
+Regular monthly or periodic investments. Best for:
+- Recurring mutual fund investments
+- Monthly stock purchases
+- Regular savings plans
+- Dollar-cost averaging strategies
+
+**Recommended columns:**
+- Fund/Scheme Name (Text)
+- Monthly Amount (Currency)
+- Investment Start Date (Date)
+- Frequency (Text: Monthly/Quarterly/Yearly)
+- Duration (Months) (Number)
+- Current Value (Currency)
+- Expected Annual Return % (Percent)
+
+> **Tip:** The investment type selector is purely a helper — it provides contextual hints for relevant fields based on your selection. Your actual data structure is determined by the columns you create.
 
 ---
 
