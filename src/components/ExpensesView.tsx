@@ -12,13 +12,22 @@ import {
   DATE_COLUMN,
   EXPENSE_COLUMNS,
   categoriesIn,
+  describeRow,
   findColumn,
+  isIncomeSheet,
   monthTitle,
   sortMonthSheets,
 } from '../lib/expenses';
 import { MONTH_ABBR, dayLabel, parseSheetDate } from '../lib/dates';
 import { Banner, Button, Empty, IconButton, Sheet, Spinner, inputClass } from './UI';
-import { IconDots, IconExternal, IconPlus, IconRefresh, IconTrash } from './Icons';
+import {
+  IconArrowDown,
+  IconDots,
+  IconExternal,
+  IconPlus,
+  IconRefresh,
+  IconTrash,
+} from './Icons';
 import { ColumnManager } from './Manage';
 import { ExpenseEditor } from './ExpenseEditor';
 
@@ -163,6 +172,9 @@ export function ExpensesView({
   const catIdx = findColumn(headers, CATEGORY_COLUMN, types);
   const amountIdx = findColumn(headers, AMOUNT_COLUMN, types, 'currency');
 
+  /** Money in, not a month of spending — it gets its own colour and wording. */
+  const isIncome = active ? isIncomeSheet(active.title) : false;
+
   /**
    * The managed list, plus any category already used in this month that isn't on
    * it — so historic entries stay selectable even after a category is retired.
@@ -306,17 +318,21 @@ export function ExpensesView({
           {/* Month total */}
           <div
             className="relative overflow-hidden rounded-card p-5 text-white shadow-card"
-            style={{ background: `linear-gradient(135deg, ${ACCENT} 0%, #b8442f 100%)` }}
+            style={{
+              background: isIncome
+                ? 'linear-gradient(135deg,#0e9f6e 0%,#046c4e 100%)'
+                : `linear-gradient(135deg, ${ACCENT} 0%, #b8442f 100%)`,
+            }}
           >
             <div className="pointer-events-none absolute -top-12 -right-8 size-40 rounded-full bg-white/12 blur-2xl" />
             <p className="text-[0.7rem] font-bold tracking-widest text-white/75 uppercase">
-              {filter ? `${filter} · ${active.title}` : `Spent in ${active.title}`}
+              {isIncome ? 'Total income' : filter ? `${filter} · ${active.title}` : `Spent in ${active.title}`}
             </p>
             <p className="mt-1.5 text-[2.2rem] leading-none font-extrabold tracking-tight tabular-nums">
               {fmt.money(monthTotal)}
             </p>
             <p className="mt-2 text-xs font-semibold text-white/75">
-              {shown.length} {shown.length === 1 ? 'expense' : 'expenses'}
+              {shown.length} {isIncome ? (shown.length === 1 ? 'entry' : 'entries') : shown.length === 1 ? 'expense' : 'expenses'}
             </p>
 
           </div>
@@ -324,7 +340,9 @@ export function ExpensesView({
           <div className="mt-3 flex items-center gap-2">
             <div className="flex-1">
               <p className="text-sm font-bold">{active.title}</p>
-              <p className="text-xs font-medium text-muted">Tap an expense to edit or delete</p>
+              <p className="text-xs font-medium text-muted">
+                Tap {isIncome ? 'an entry' : 'an expense'} to edit or delete
+              </p>
             </div>
             <IconButton label="Refresh" onClick={() => void loadData(activeTitle)}>
               <IconRefresh />
@@ -404,20 +422,34 @@ export function ExpensesView({
                           i > 0 ? 'border-t border-line' : ''
                         }`}
                       >
-                        <span
-                          className="grid size-10 shrink-0 place-items-center rounded-2xl text-sm"
-                          style={{
-                            background: `color-mix(in srgb, ${accentFor(e.category || 'x')} 16%, transparent)`,
-                          }}
-                        >
-                          {(e.category || '?').slice(0, 1).toUpperCase()}
-                        </span>
+                        {isIncome ? (
+                          <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-pos/12 text-pos">
+                            <IconArrowDown className="size-5" />
+                          </span>
+                        ) : (
+                          <span
+                            className="grid size-10 shrink-0 place-items-center rounded-2xl text-sm"
+                            style={{
+                              background: `color-mix(in srgb, ${accentFor(e.category || 'x')} 16%, transparent)`,
+                            }}
+                          >
+                            {(e.category || '?').slice(0, 1).toUpperCase()}
+                          </span>
+                        )}
                         <div className="min-w-0 flex-1">
-                          <p className="truncate font-bold">{e.category || 'Uncategorised'}</p>
+                          <p className="truncate font-bold">
+                            {isIncome
+                              ? describeRow(headers, e.row, [dateIdx, amountIdx], 'Income')
+                              : e.category || 'Uncategorised'}
+                          </p>
                           <p className="truncate text-xs font-medium text-muted">
                             {headers
                               .map((_, hi) =>
-                                hi !== dateIdx && hi !== catIdx && hi !== amountIdx && e.row[hi]?.trim()
+                                hi !== dateIdx &&
+                                hi !== catIdx &&
+                                hi !== amountIdx &&
+                                e.row[hi]?.trim() &&
+                                !(isIncome && e.row[hi] === describeRow(headers, e.row, [dateIdx, amountIdx], ''))
                                   ? e.row[hi]
                                   : null,
                               )
@@ -425,7 +457,10 @@ export function ExpensesView({
                               .join(' · ') || '—'}
                           </p>
                         </div>
-                        <span className="shrink-0 font-extrabold tabular-nums">
+                        <span
+                          className={`shrink-0 font-extrabold tabular-nums ${isIncome ? 'text-pos' : ''}`}
+                        >
+                          {isIncome ? '+ ' : ''}
                           {amountIdx >= 0 ? e.row[amountIdx] || fmt.money(0) : ''}
                         </span>
                       </li>

@@ -118,7 +118,7 @@ function InvestmentSummary({
           className="animate-rise relative overflow-hidden rounded-[1.75rem] p-6 text-white shadow-card"
           style={{
             background: up
-              ? 'linear-gradient(135deg,#4f46e5 0%,#7c3aed 52%,#a855f7 100%)'
+              ? 'linear-gradient(135deg,#255b45 0%,#2f6f55 52%,#357a58 100%)'
               : 'linear-gradient(135deg,#be123c 0%,#e11d48 55%,#f43f5e 100%)',
           }}
         >

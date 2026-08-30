@@ -7,15 +7,15 @@
 :root {
   --bg: #fbf7f2;
   --bg-glow-a: #ffd9a8;
-  --bg-glow-b: #cdd4ff;
+  --bg-glow-b: #cfe6d8;
   --surface: #ffffff;
   --surface-2: #f6f0e8;
   --ink: #1c1714;
   --ink-2: #574c43;
   --muted: #8d8177;
   --line: #ebe2d7;
-  --brand: #5b4bea;
-  --brand-soft: #ede9ff;
+  --brand: #37705a;
+  --brand-soft: #e7f0ea;
   --on-brand: #ffffff;
   --pos: #0e9f6e;
   --neg: #e0405e;
@@ -23,51 +23,51 @@
   --leaf: #4f8a64;
   --shadow-sm: 0 1px 2px rgb(28 23 20 / 0.05);
   --shadow-md: 0 2px 4px rgb(28 23 20 / 0.04), 0 12px 28px -14px rgb(28 23 20 / 0.22);
-  --shadow-lg: 0 8px 40px -12px rgb(91 75 234 / 0.45);
+  --shadow-lg: 0 8px 40px -12px rgb(55 112 90 / 0.4);
 }
 
 :root:not([data-theme='light']) {
   @media (prefers-color-scheme: dark) {
     --bg: #141220;
     --bg-glow-a: #4a2d6b;
-    --bg-glow-b: #1d3a6b;
+    --bg-glow-b: #2d5744;
     --surface: #1e1b2e;
     --surface-2: #272338;
     --ink: #f6f3ff;
     --ink-2: #cdc5e4;
     --muted: #9b92b5;
     --line: #322c46;
-    --brand: #9d8bff;
-    --brand-soft: #2a2545;
-    --on-brand: #14121f;
+    --brand: #6fb894;
+    --brand-soft: #1f3329;
+    --on-brand: #10231a;
     --pos: #34d399;
     --neg: #fb7185;
     --leaf: #63a97b;
     --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
     --shadow-md: 0 2px 4px rgb(0 0 0 / 0.2), 0 12px 28px -14px rgb(0 0 0 / 0.6);
-    --shadow-lg: 0 8px 40px -12px rgb(157 139 255 / 0.5);
+    --shadow-lg: 0 8px 40px -12px rgb(111 184 148 / 0.45);
   }
 }
 
 :root[data-theme='dark'] {
   --bg: #141220;
   --bg-glow-a: #4a2d6b;
-  --bg-glow-b: #1d3a6b;
+  --bg-glow-b: #2d5744;
   --surface: #1e1b2e;
   --surface-2: #272338;
   --ink: #f6f3ff;
   --ink-2: #cdc5e4;
   --muted: #9b92b5;
   --line: #322c46;
-  --brand: #9d8bff;
-  --brand-soft: #2a2545;
-  --on-brand: #14121f;
+  --brand: #6fb894;
+  --brand-soft: #1f3329;
+  --on-brand: #10231a;
   --pos: #34d399;
   --neg: #fb7185;
   --leaf: #63a97b;
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
   --shadow-md: 0 2px 4px rgb(0 0 0 / 0.2), 0 12px 28px -14px rgb(0 0 0 / 0.6);
-  --shadow-lg: 0 8px 40px -12px rgb(157 139 255 / 0.5);
+  --shadow-lg: 0 8px 40px -12px rgb(111 184 148 / 0.45);
 }
 
 @theme inline {

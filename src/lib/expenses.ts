@@ -41,6 +41,11 @@ export function parseMonthTitle(title: string): Date | null {
 /** Newest month first; anything not month-shaped sinks to the bottom, alphabetically. */
 export function sortMonthSheets(sheets: SheetMeta[]): SheetMeta[] {
   return [...sheets].sort((a, b) => {
+    // Income leads, then months newest first, then anything else alphabetically.
+    const ia = isIncomeSheet(a.title);
+    const ib = isIncomeSheet(b.title);
+    if (ia !== ib) return ia ? -1 : 1;
+
     const da = parseMonthTitle(a.title);
     const db = parseMonthTitle(b.title);
     if (da && db) return db.getTime() - da.getTime();
@@ -77,4 +82,34 @@ export function categoriesIn(rows: string[][], colIndex: number): string[] {
     if (v) counts.set(v, (counts.get(v) ?? 0) + 1);
   }
   return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([v]) => v);
+}
+
+/**
+ * A tab named "Income" is money coming in, not a month of spending. It's pinned
+ * to the front of the switcher and rendered differently — income rows have no
+ * category, so treating them like expenses showed a "?" badge and the label
+ * "Uncategorised".
+ */
+export const INCOME_SHEET = 'Income';
+
+export const isIncomeSheet = (title: string) =>
+  title.trim().toLowerCase() === INCOME_SHEET.toLowerCase();
+
+/**
+ * What an income row is *for* — the first text column carrying a value, e.g.
+ * "Salary" or "Freelance". Falls back to the sheet's own name so a row is
+ * never nameless.
+ */
+export function describeRow(
+  headers: string[],
+  row: string[],
+  skip: number[],
+  fallback: string,
+): string {
+  for (let i = 0; i < headers.length; i++) {
+    if (skip.includes(i)) continue;
+    const v = (row[i] ?? '').trim();
+    if (v) return v;
+  }
+  return fallback;
 }
