@@ -12,6 +12,15 @@ import { Button, Field, Sheet, inputClass } from './UI';
 import { DateField } from './DateField';
 import { IconTrash } from './Icons';
 
+/**
+ * Dates that record the *end* of something — a sale, an exit, a maturity. These
+ * never pre-fill, because on a new entry they haven't happened yet.
+ */
+const CLOSING_DATE = /sell|sold|exit|clos|redeem|matur|withdraw|end/i;
+
+/** The subset of those that a "sold / completed" tick should stamp with today. */
+const SALE_DATE = /sell|sold|exit|clos|redeem|withdraw/i;
+
 /** The keyboard that suits each column type — small thing, big deal on a phone. */
 function inputModeFor(type: ColumnType): 'decimal' | 'text' {
   return type === 'currency' || type === 'number' || type === 'percent' ? 'decimal' : 'text';
@@ -53,26 +62,63 @@ export function RowEditor({
 
   const editing = formulaRow !== null;
 
+  /** The leftmost date column — the one that means "when this entry happened". */
+  const firstDateIndex = columnTypes.findIndex((t) => isDateLike(t));
+  const saleDateIndex = headers.findIndex(
+    (h, i) => isDateLike(columnTypes[i] ?? 'text') && SALE_DATE.test(h),
+  );
+
+  /** Remembers a date we filled in ourselves, so un-ticking can take it back. */
+  const [autoFilled, setAutoFilled] = useState<string | null>(null);
+
   useEffect(() => {
     if (!open) return;
     setValues(
-      headers.map((_, i) => {
-        // Every date column opens on today for a new row, and on its own stored
-        // date when editing — never on a raw serial number.
+      headers.map((h, i) => {
         // A new entry is Ongoing until you tick it.
         if ((columnTypes[i] ?? 'text') === 'status') {
           const stored = formulaRow?.[i] ?? '';
           return isCompleted(stored) ? STATUS_DONE : STATUS_OPEN;
         }
+
         if (isDateLike(columnTypes[i] ?? 'text')) {
           const parsed = parseSheetDate(displayRow?.[i] ?? formulaRow?.[i] ?? '');
-          return parsed ? toISODate(parsed) : editing ? '' : todayISO();
+          if (parsed) return toISODate(parsed);
+          if (editing) return '';
+          // Only the entry's own date starts on today. A sell or maturity date
+          // is left blank — pre-filling it would claim something that hasn't
+          // happened, and it's easy to save without noticing.
+          return i === firstDateIndex && !CLOSING_DATE.test(h) ? todayISO() : '';
         }
+
         return formulaRow?.[i] ?? '';
       }),
     );
     setConfirmDelete(false);
+    setAutoFilled(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, headers, columnTypes, displayRow, formulaRow, editing]);
+
+  /**
+   * Ticking "sold" stamps the sale date with today, so the two can't disagree.
+   * Un-ticking takes it back only if we were the ones who filled it — a date you
+   * typed yourself is never thrown away.
+   */
+  const toggleStatus = (i: number, done: boolean) => {
+    setAt(i, done ? STATUS_OPEN : STATUS_DONE);
+    if (saleDateIndex < 0) return;
+
+    if (!done) {
+      if (!(values[saleDateIndex] ?? '').trim()) {
+        const today = todayISO();
+        setAt(saleDateIndex, today);
+        setAutoFilled(today);
+      }
+    } else if (autoFilled && values[saleDateIndex] === autoFilled) {
+      setAt(saleDateIndex, '');
+      setAutoFilled(null);
+    }
+  };
 
   const setAt = (i: number, v: string) =>
     setValues((prev) => {
@@ -105,7 +151,7 @@ export function RowEditor({
             return (
               <button
                 key={`${h}-${i}`}
-                onClick={() => setAt(i, done ? STATUS_OPEN : STATUS_DONE)}
+                onClick={() => toggleStatus(i, done)}
                 className="press flex w-full items-center gap-3 rounded-2xl border border-line bg-surface px-4 py-3.5 text-left"
               >
                 <span
@@ -124,7 +170,9 @@ export function RowEditor({
                   <span className="block text-xs text-muted">
                     {done
                       ? 'Kept in the sheet, hidden from this list'
-                      : 'Ongoing — tick once this is done'}
+                      : saleDateIndex >= 0
+                        ? `Ongoing — ticking this fills in ${headers[saleDateIndex]}`
+                        : 'Ongoing — tick once this is done'}
                   </span>
                 </span>
               </button>
