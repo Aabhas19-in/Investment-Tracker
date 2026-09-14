@@ -5,6 +5,7 @@ import { CURRENCY } from './lib/format';
 import { isSignedIn, onAuthChange, signIn } from './lib/googleAuth';
 import * as api from './lib/sheets';
 import { countPressing } from './lib/triggers';
+import { findSipSheets, isSipSheet, sipAttentionCount } from './lib/sip';
 import { Banner, Button } from './components/UI';
 import {
   IconChart,
@@ -18,6 +19,7 @@ import { DataView, type DataActions } from './components/DataView';
 import { ExpensesView } from './components/ExpensesView';
 import { Summary } from './components/Summary';
 import { Settings } from './components/Settings';
+import { SipView } from './components/SipView';
 
 const TABS: { id: Tab; label: string; icon: typeof IconWallet }[] = [
   { id: 'data', label: 'Investments', icon: IconWallet },
@@ -52,6 +54,10 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [triggerCounts, setTriggerCounts] = useState<Record<string, number>>({});
+  /** The SIP tracker is up instead of a sheet — kept here so it survives a tab switch. */
+  const [sipOpen, setSipOpen] = useState(false);
+  /** SIPs with a debit that's gone by unmarked. */
+  const [sipAttention, setSipAttention] = useState(0);
 
   const ctx: api.SheetsCtx = { clientId: config.clientId, spreadsheetId: config.spreadsheetId };
   const active = sheets.find((s) => s.title === activeTitle) ?? null;
@@ -73,9 +79,13 @@ export default function App() {
       try {
         const list = await api.listSheets(ctx);
         setSheets(list);
+        // The SIP tabs are only ever shown through the SIP tracker, never as a sheet.
+        const selectable = list.filter((s) => !isSipSheet(s.title));
         setActiveTitle((prev) => {
           const wanted = preferTitle ?? prev;
-          return list.some((s) => s.title === wanted) ? wanted! : (list[0]?.title ?? null);
+          return selectable.some((s) => s.title === wanted)
+            ? wanted!
+            : (selectable[0]?.title ?? null);
         });
       } catch (e) {
         fail(e);
@@ -124,16 +134,31 @@ export default function App() {
 
     void (async () => {
       const counts: Record<string, number> = {};
+      const read: Record<string, SheetData> = {};
       for (const sheet of sheets) {
         if (cancelled) return;
         try {
           const d = await api.readSheet(ctx, sheet.title);
+          read[sheet.title] = d;
           counts[sheet.title] = countPressing(d.rows, d.columnTypes);
         } catch {
           /* a sheet we cannot read simply gets no badge */
         }
       }
-      if (!cancelled) setTriggerCounts(counts);
+      if (cancelled) return;
+      setTriggerCounts(counts);
+
+      // SIPs ride along on the same reads, so the badge is right before the tracker
+      // is ever opened. If either tab failed to read, keep the last count rather than
+      // guessing — a missing payments read would make every month look unmarked.
+      const sip = findSipSheets(sheets);
+      if (!sip.plans) {
+        setSipAttention(0);
+      } else if (read[sip.plans.title] && (!sip.payments || read[sip.payments.title])) {
+        setSipAttention(
+          sipAttentionCount(read[sip.plans.title], sip.payments ? read[sip.payments.title] : null),
+        );
+      }
     })();
 
     return () => {
@@ -272,7 +297,7 @@ export default function App() {
     <Shell
       tab={tab}
       setTab={setTab}
-      badges={{ data: totalReminders }}
+      badges={{ data: totalReminders + sipAttention }}
       header={
         <div className="flex items-end justify-between gap-3 px-4 pt-3 pb-1">
           <div className="min-w-0">
@@ -304,6 +329,19 @@ export default function App() {
           onRefresh={() => void loadData(activeTitle)}
           actions={actions}
           reminderCounts={liveCounts}
+          sipOpen={sipOpen}
+          onSipOpen={setSipOpen}
+          sipAttention={sipAttention}
+          sipPanel={
+            <SipView
+              clientId={config.clientId}
+              spreadsheetId={config.spreadsheetId}
+              sheets={sheets}
+              currency={CURRENCY}
+              onSheetsChanged={() => loadSheets()}
+              onAttentionChange={setSipAttention}
+            />
+          }
         />
       )}
       {tab === 'expenses' && (

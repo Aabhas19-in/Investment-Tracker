@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { ColumnSpec, SheetData, SheetMeta } from '../types';
 import { parseNumeric } from '../lib/format';
 import { columnTypeDef, isCompleted, type ColumnType } from '../lib/columnTypes';
 import { isPressing, triggerInfo, triggerTone, type TriggerInfo } from '../lib/triggers';
 import { accentFor, initials } from '../lib/accent';
 import { sheetUrl, useConfig } from '../lib/config';
+import { SIP_ACCENT, isSipSheet } from '../lib/sip';
 import { Badge, Button, Empty, IconButton, Sheet, Spinner, inputClass } from './UI';
 import {
   IconCards,
@@ -14,6 +15,7 @@ import {
   IconPencil,
   IconPlus,
   IconRefresh,
+  IconRepeat,
   IconBell,
   IconSearch,
   IconTable,
@@ -76,6 +78,10 @@ export function DataView({
   onRefresh,
   actions,
   reminderCounts,
+  sipOpen,
+  onSipOpen,
+  sipAttention,
+  sipPanel,
 }: {
   sheets: SheetMeta[];
   active: SheetMeta | null;
@@ -87,6 +93,13 @@ export function DataView({
   actions: DataActions;
   /** Pending reminders per sheet title, for the badge on each chip. */
   reminderCounts: Record<string, number>;
+  /** Whether the SIP tracker is showing in place of a sheet. */
+  sipOpen: boolean;
+  onSipOpen: (open: boolean) => void;
+  /** SIPs with a debit that's gone by unmarked, for the SIP chip's badge. */
+  sipAttention: number;
+  /** The SIP tracker itself, rendered under the switcher when its chip is on. */
+  sipPanel: ReactNode;
 }) {
   const [config, setConfig] = useConfig();
   const [newSheetOpen, setNewSheetOpen] = useState(false);
@@ -238,17 +251,55 @@ export function DataView({
       },
     });
 
+  // The SIP Plans and SIP Payments tabs sit behind their own chip instead.
+  const listedSheets = useMemo(() => sheets.filter((s) => !isSipSheet(s.title)), [sheets]);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {/* Sheet switcher */}
       <div className="scroll-x flex shrink-0 gap-2.5 px-4 pt-1 pb-3">
-        {sheets.map((s) => {
+        {/* Pinned first: SIPs are a monthly habit, so they're always one tap away. */}
+        <button
+          onClick={() => onSipOpen(true)}
+          style={sipOpen ? { background: SIP_ACCENT, color: '#fff' } : { ['--accent' as string]: SIP_ACCENT }}
+          className={`press flex shrink-0 items-center gap-2 rounded-2xl py-2.5 pr-4 pl-2.5 text-sm font-bold ${
+            sipOpen ? 'shadow-card' : 'accent-chip'
+          }`}
+        >
+          <span
+            className="grid size-7 place-items-center rounded-xl"
+            style={
+              sipOpen
+                ? { background: 'rgb(255 255 255 / 0.25)', color: '#fff' }
+                : { background: `color-mix(in srgb, ${SIP_ACCENT} 22%, transparent)`, color: SIP_ACCENT }
+            }
+          >
+            <IconRepeat className="size-4" strokeWidth={2.2} />
+          </span>
+          SIP
+          {sipAttention > 0 && (
+            <span
+              className="grid min-w-5 place-items-center rounded-full px-1.5 text-[0.62rem] font-extrabold"
+              style={
+                sipOpen
+                  ? { background: 'rgb(255 255 255 / 0.3)', color: '#fff' }
+                  : { background: 'var(--neg)', color: '#fff' }
+              }
+            >
+              {sipAttention}
+            </span>
+          )}
+        </button>
+        {listedSheets.map((s) => {
           const c = accentFor(s.title);
-          const on = active?.sheetId === s.sheetId;
+          const on = !sipOpen && active?.sheetId === s.sheetId;
           return (
             <button
               key={s.sheetId}
-              onClick={() => onSelect(s.title)}
+              onClick={() => {
+                onSipOpen(false);
+                onSelect(s.title);
+              }}
               style={on ? { background: c, color: '#fff' } : { ['--accent' as string]: c }}
               className={`press flex shrink-0 items-center gap-2 rounded-2xl py-2.5 pr-4 pl-2.5 text-sm font-bold ${
                 on ? 'shadow-card' : 'accent-chip'
@@ -289,259 +340,265 @@ export function DataView({
         </button>
       </div>
 
-      {/* Totals + toolbar */}
-      {active && headers.length > 0 && (
-        <div className="shrink-0 px-4 pb-3">
-          {hasTotals && (
-            <div className="scroll-x -mx-4 flex gap-3 px-4 pb-3">
-              {shownTotals.map((t) => (
-                <div
-                  key={t.header}
-                  className="relative min-w-36 shrink-0 rounded-card bg-surface px-4 py-3 shadow-card"
-                >
-                  <button
-                    onClick={() => setTagVisible(t.header, false)}
-                    aria-label={`Hide ${t.header} total`}
-                    className="press absolute top-2 right-2 grid size-6 place-items-center rounded-full bg-surface2 text-muted"
-                  >
-                    <IconClose className="size-3" strokeWidth={2.6} />
-                  </button>
-                  <p className="truncate pr-7 text-[0.68rem] font-bold tracking-wider text-muted uppercase">
-                    {t.header}
-                  </p>
-                  <p className="mt-1 text-lg font-extrabold tabular-nums" style={{ color: accent }}>
-                    {t.value.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                  </p>
-                </div>
-              ))}
+      {sipOpen ? (
+        sipPanel
+      ) : (
+        <>
+          {/* Totals + toolbar */}
+          {active && headers.length > 0 && (
+            <div className="shrink-0 px-4 pb-3">
+              {hasTotals && (
+                <div className="scroll-x -mx-4 flex gap-3 px-4 pb-3">
+                  {shownTotals.map((t) => (
+                    <div
+                      key={t.header}
+                      className="relative min-w-36 shrink-0 rounded-card bg-surface px-4 py-3 shadow-card"
+                    >
+                      <button
+                        onClick={() => setTagVisible(t.header, false)}
+                        aria-label={`Hide ${t.header} total`}
+                        className="press absolute top-2 right-2 grid size-6 place-items-center rounded-full bg-surface2 text-muted"
+                      >
+                        <IconClose className="size-3" strokeWidth={2.6} />
+                      </button>
+                      <p className="truncate pr-7 text-[0.68rem] font-bold tracking-wider text-muted uppercase">
+                        {t.header}
+                      </p>
+                      <p className="mt-1 text-lg font-extrabold tabular-nums" style={{ color: accent }}>
+                        {t.value.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                  ))}
 
+                </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                {searchOpen ? (
+                  <input
+                    className={inputClass}
+                    value={query}
+                    autoFocus
+                    placeholder={`Search ${active.title}…`}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onBlur={() => !query && setSearchOpen(false)}
+                  />
+                ) : (
+                  <>
+                    <div className="flex-1">
+                      <p className="text-sm font-bold">
+                        {visible.length} {visible.length === 1 ? 'entry' : 'entries'}
+                      </p>
+                      <p className="text-xs font-medium text-muted">
+                        Tap one to edit or delete
+                        {completedCount > 0 && (
+                          <>
+                            {' · '}
+                            <button
+                              onClick={() => setShowCompleted(!showCompleted)}
+                              className="font-bold text-brand"
+                            >
+                              {showCompleted ? 'hide' : 'show'} {completedCount} completed
+                            </button>
+                          </>
+                        )}
+                      </p>
+                    </div>
+                    <IconButton label="Search" onClick={() => setSearchOpen(true)}>
+                      <IconSearch />
+                    </IconButton>
+                    <IconButton
+                      label={view === 'cards' ? 'Switch to table' : 'Switch to cards'}
+                      onClick={() => setView(view === 'cards' ? 'table' : 'cards')}
+                    >
+                      {view === 'cards' ? <IconTable /> : <IconCards />}
+                    </IconButton>
+                    <IconButton label="Refresh" onClick={onRefresh}>
+                      <IconRefresh />
+                    </IconButton>
+                  </>
+                )}
+                <IconButton
+                  label="Sheet options"
+                  onClick={() => {
+                    setRenameDraft(active.title);
+                    setConfirmSheetDelete(false);
+                    setMoreOpen(true);
+                  }}
+                >
+                  <IconDots />
+                </IconButton>
+              </div>
             </div>
           )}
 
-          <div className="flex items-center gap-2">
-            {searchOpen ? (
-              <input
-                className={inputClass}
-                value={query}
-                autoFocus
-                placeholder={`Search ${active.title}…`}
-                onChange={(e) => setQuery(e.target.value)}
-                onBlur={() => !query && setSearchOpen(false)}
-              />
-            ) : (
-              <>
-                <div className="flex-1">
-                  <p className="text-sm font-bold">
-                    {visible.length} {visible.length === 1 ? 'entry' : 'entries'}
+          {/* Entries */}
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {alerts.length > 0 && (
+              <div className="animate-rise mx-4 mb-3 overflow-hidden rounded-card border border-line bg-surface shadow-card">
+                <div className="flex items-center gap-2 border-b border-line px-4 py-2.5">
+                  <IconBell className="size-4 text-neg" />
+                  <p className="text-[0.7rem] font-extrabold tracking-widest text-muted uppercase">
+                    {alerts.length} {alerts.length === 1 ? 'reminder' : 'reminders'}
                   </p>
-                  <p className="text-xs font-medium text-muted">
-                    Tap one to edit or delete
-                    {completedCount > 0 && (
-                      <>
-                        {' · '}
-                        <button
-                          onClick={() => setShowCompleted(!showCompleted)}
-                          className="font-bold text-brand"
-                        >
-                          {showCompleted ? 'hide' : 'show'} {completedCount} completed
-                        </button>
-                      </>
+                  <span className="ml-auto flex items-center gap-1.5">
+                    {overdueCount > 0 && (
+                      <span className="rounded-full bg-neg/12 px-2 py-0.5 text-[0.68rem] font-extrabold text-neg">
+                        {overdueCount} due
+                      </span>
                     )}
-                  </p>
+                    {soonCount > 0 && (
+                      <span
+                        className="rounded-full px-2 py-0.5 text-[0.68rem] font-extrabold"
+                        style={{ color: '#b4740f', background: 'color-mix(in srgb, #e8992b 16%, transparent)' }}
+                      >
+                        {soonCount} soon
+                      </span>
+                    )}
+                  </span>
                 </div>
-                <IconButton label="Search" onClick={() => setSearchOpen(true)}>
-                  <IconSearch />
-                </IconButton>
-                <IconButton
-                  label={view === 'cards' ? 'Switch to table' : 'Switch to cards'}
-                  onClick={() => setView(view === 'cards' ? 'table' : 'cards')}
-                >
-                  {view === 'cards' ? <IconTable /> : <IconCards />}
-                </IconButton>
-                <IconButton label="Refresh" onClick={onRefresh}>
-                  <IconRefresh />
-                </IconButton>
-              </>
-            )}
-            <IconButton
-              label="Sheet options"
-              onClick={() => {
-                setRenameDraft(active.title);
-                setConfirmSheetDelete(false);
-                setMoreOpen(true);
-              }}
-            >
-              <IconDots />
-            </IconButton>
-          </div>
-        </div>
-      )}
-
-      {/* Entries */}
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        {alerts.length > 0 && (
-          <div className="animate-rise mx-4 mb-3 overflow-hidden rounded-card border border-line bg-surface shadow-card">
-            <div className="flex items-center gap-2 border-b border-line px-4 py-2.5">
-              <IconBell className="size-4 text-neg" />
-              <p className="text-[0.7rem] font-extrabold tracking-widest text-muted uppercase">
-                {alerts.length} {alerts.length === 1 ? 'reminder' : 'reminders'}
-              </p>
-              <span className="ml-auto flex items-center gap-1.5">
-                {overdueCount > 0 && (
-                  <span className="rounded-full bg-neg/12 px-2 py-0.5 text-[0.68rem] font-extrabold text-neg">
-                    {overdueCount} due
-                  </span>
-                )}
-                {soonCount > 0 && (
-                  <span
-                    className="rounded-full px-2 py-0.5 text-[0.68rem] font-extrabold"
-                    style={{ color: '#b4740f', background: 'color-mix(in srgb, #e8992b 16%, transparent)' }}
-                  >
-                    {soonCount} soon
-                  </span>
-                )}
-              </span>
-            </div>
-            <ul>
-              {(alertsExpanded ? alerts : alerts.slice(0, 5)).map((a, i) => {
-                const tone = triggerTone(a.info.status);
-                return (
-                  <li
-                    key={`${a.rowIndex}-${a.column}-${i}`}
-                    onClick={() => setEditing(a.rowIndex)}
-                    className={`flex cursor-pointer items-center gap-3 px-4 py-3 active:bg-surface2 ${
-                      i > 0 ? 'border-t border-line' : ''
-                    }`}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-bold">{a.label}</p>
-                      <p className="truncate text-xs font-medium text-muted">{a.column}</p>
-                    </div>
-                    <span
-                      className="shrink-0 rounded-full px-2.5 py-1 text-xs font-extrabold"
-                      style={{ color: tone.fg, background: tone.bg }}
-                    >
-                      {a.info.status === 'passed' ? 'Due' : ''} {a.info.label}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-            {alerts.length > 5 && (
-              <button
-                onClick={() => setAlertsExpanded(!alertsExpanded)}
-                className="press w-full border-t border-line px-4 py-2.5 text-xs font-bold text-brand"
-              >
-                {alertsExpanded ? 'Show less' : `Show all ${alerts.length}`}
-              </button>
-            )}
-          </div>
-        )}
-        {loading && !data ? (
-          <Spinner label="Reading your sheet…" />
-        ) : !active ? (
-          <Empty
-            emoji="🌱"
-            title="Start your first sheet"
-            body="One sheet per kind of investment — Gold, Stocks, whatever you're putting money into."
-            action={
-              <Button icon={<IconPlus />} onClick={() => setNewSheetOpen(true)}>
-                Create a sheet
-              </Button>
-            }
-          />
-        ) : headers.length === 0 ? (
-          <Empty
-            emoji="🧱"
-            title={`${active.title} has no columns`}
-            body="Add the columns you want to track. You can change them whenever you like."
-            action={<Button onClick={() => setColumnsOpen(true)}>Add columns</Button>}
-          />
-        ) : visible.length === 0 ? (
-          <Empty
-            emoji={query ? '🔍' : '💸'}
-            title={query ? 'Nothing matches' : 'No entries yet'}
-            body={
-              query
-                ? 'Try a different search term.'
-                : 'Tap the + button to record your first investment here.'
-            }
-          />
-        ) : view === 'cards' ? (
-          <ul className="space-y-3 px-4 pb-32">
-            {visible.map(({ row, index }, n) => (
-              <EntryCard
-                key={index}
-                row={row}
-                headers={headers}
-                defs={defs}
-                highlights={highlights}
-                accent={accent}
-                trigger={rowTriggers.get(index)}
-                completed={isRowCompleted(row)}
-                delay={n}
-                onOpen={() => setEditing(index)}
-              />
-            ))}
-          </ul>
-        ) : (
-          <div className="px-4 pb-32">
-            <div className="scroll-x rounded-card bg-surface shadow-card">
-              {/* border-separate, not collapse: sticky cells don't work under
-                  border-collapse in Chrome, which unpins the Edit column. */}
-              <table className="w-full border-separate border-spacing-0 text-sm">
-                <thead>
-                  <tr>
-                    {headers.map((h, i) => (
-                      <th
-                        key={i}
-                        className={`border-b border-line px-4 py-3 text-[0.68rem] font-bold whitespace-nowrap text-muted uppercase ${
-                          defs[i].numeric ? 'text-right' : 'text-left'
+                <ul>
+                  {(alertsExpanded ? alerts : alerts.slice(0, 5)).map((a, i) => {
+                    const tone = triggerTone(a.info.status);
+                    return (
+                      <li
+                        key={`${a.rowIndex}-${a.column}-${i}`}
+                        onClick={() => setEditing(a.rowIndex)}
+                        className={`flex cursor-pointer items-center gap-3 px-4 py-3 active:bg-surface2 ${
+                          i > 0 ? 'border-t border-line' : ''
                         }`}
                       >
-                        {h || `Col ${i + 1}`}
-                      </th>
-                    ))}
-                    <th className="sticky right-0 border-b border-line bg-surface px-3 py-3" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {visible.map(({ row, index }) => (
-                    <tr key={index} onClick={() => setEditing(index)} className="cursor-pointer">
-                      {headers.map((_, i) => (
-                        <td
-                          key={i}
-                          className={`border-b border-line px-4 py-3.5 font-medium whitespace-nowrap ${
-                            defs[i].numeric ? 'text-right tabular-nums' : 'text-left'
-                          } ${row[i] ? '' : 'text-muted/50'}`}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-bold">{a.label}</p>
+                          <p className="truncate text-xs font-medium text-muted">{a.column}</p>
+                        </div>
+                        <span
+                          className="shrink-0 rounded-full px-2.5 py-1 text-xs font-extrabold"
+                          style={{ color: tone.fg, background: tone.bg }}
                         >
-                          {row[i] || '—'}
-                        </td>
-                      ))}
-                      <td className="sticky right-0 border-b border-line bg-surface px-3 py-3.5">
-                        <span className="grid size-8 place-items-center rounded-xl bg-surface2 text-ink2">
-                          <IconPencil className="size-4" />
+                          {a.info.status === 'passed' ? 'Due' : ''} {a.info.label}
                         </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+                {alerts.length > 5 && (
+                  <button
+                    onClick={() => setAlertsExpanded(!alertsExpanded)}
+                    className="press w-full border-t border-line px-4 py-2.5 text-xs font-bold text-brand"
+                  >
+                    {alertsExpanded ? 'Show less' : `Show all ${alerts.length}`}
+                  </button>
+                )}
+              </div>
+            )}
+            {loading && !data ? (
+              <Spinner label="Reading your sheet…" />
+            ) : !active ? (
+              <Empty
+                emoji="🌱"
+                title="Start your first sheet"
+                body="One sheet per kind of investment — Gold, Stocks, whatever you're putting money into."
+                action={
+                  <Button icon={<IconPlus />} onClick={() => setNewSheetOpen(true)}>
+                    Create a sheet
+                  </Button>
+                }
+              />
+            ) : headers.length === 0 ? (
+              <Empty
+                emoji="🧱"
+                title={`${active.title} has no columns`}
+                body="Add the columns you want to track. You can change them whenever you like."
+                action={<Button onClick={() => setColumnsOpen(true)}>Add columns</Button>}
+              />
+            ) : visible.length === 0 ? (
+              <Empty
+                emoji={query ? '🔍' : '💸'}
+                title={query ? 'Nothing matches' : 'No entries yet'}
+                body={
+                  query
+                    ? 'Try a different search term.'
+                    : 'Tap the + button to record your first investment here.'
+                }
+              />
+            ) : view === 'cards' ? (
+              <ul className="space-y-3 px-4 pb-32">
+                {visible.map(({ row, index }, n) => (
+                  <EntryCard
+                    key={index}
+                    row={row}
+                    headers={headers}
+                    defs={defs}
+                    highlights={highlights}
+                    accent={accent}
+                    trigger={rowTriggers.get(index)}
+                    completed={isRowCompleted(row)}
+                    delay={n}
+                    onOpen={() => setEditing(index)}
+                  />
+                ))}
+              </ul>
+            ) : (
+              <div className="px-4 pb-32">
+                <div className="scroll-x rounded-card bg-surface shadow-card">
+                  {/* border-separate, not collapse: sticky cells don't work under
+                      border-collapse in Chrome, which unpins the Edit column. */}
+                  <table className="w-full border-separate border-spacing-0 text-sm">
+                    <thead>
+                      <tr>
+                        {headers.map((h, i) => (
+                          <th
+                            key={i}
+                            className={`border-b border-line px-4 py-3 text-[0.68rem] font-bold whitespace-nowrap text-muted uppercase ${
+                              defs[i].numeric ? 'text-right' : 'text-left'
+                            }`}
+                          >
+                            {h || `Col ${i + 1}`}
+                          </th>
+                        ))}
+                        <th className="sticky right-0 border-b border-line bg-surface px-3 py-3" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visible.map(({ row, index }) => (
+                        <tr key={index} onClick={() => setEditing(index)} className="cursor-pointer">
+                          {headers.map((_, i) => (
+                            <td
+                              key={i}
+                              className={`border-b border-line px-4 py-3.5 font-medium whitespace-nowrap ${
+                                defs[i].numeric ? 'text-right tabular-nums' : 'text-left'
+                              } ${row[i] ? '' : 'text-muted/50'}`}
+                            >
+                              {row[i] || '—'}
+                            </td>
+                          ))}
+                          <td className="sticky right-0 border-b border-line bg-surface px-3 py-3.5">
+                            <span className="grid size-8 place-items-center rounded-xl bg-surface2 text-ink2">
+                              <IconPencil className="size-4" />
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      {/* Add entry */}
-      {active && headers.length > 0 && (
-        <button
-          onClick={() => setEditing('new')}
-          style={{ background: accent }}
-          className="press fixed right-5 bottom-26 z-30 grid size-15 place-items-center rounded-[1.4rem] text-white shadow-glow"
-          aria-label="Add entry"
-        >
-          <IconPlus className="size-7" strokeWidth={2.4} />
-        </button>
+          {/* Add entry */}
+          {active && headers.length > 0 && (
+            <button
+              onClick={() => setEditing('new')}
+              style={{ background: accent }}
+              className="press fixed right-5 bottom-26 z-30 grid size-15 place-items-center rounded-[1.4rem] text-white shadow-glow"
+              aria-label="Add entry"
+            >
+              <IconPlus className="size-7" strokeWidth={2.4} />
+            </button>
+          )}
+        </>
       )}
 
       <NewSheetDialog

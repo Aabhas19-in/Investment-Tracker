@@ -4,6 +4,7 @@ import { readSheet, type SheetsCtx } from '../lib/sheets';
 import { makeFormatters, parseNumeric, type CurrencyCode } from '../lib/format';
 import { columnTypeDef } from '../lib/columnTypes';
 import { accentFor, initials } from '../lib/accent';
+import { isSipPaymentsSheet, isSipPlansSheet } from '../lib/sip';
 import { Badge, Banner, Button, Empty, Spinner } from './UI';
 import { IconArrowDown, IconArrowUp, IconRefresh } from './Icons';
 import { ExpenseSummary } from './ExpenseSummary';
@@ -56,8 +57,11 @@ function InvestmentSummary({
     setLoading(true);
     setError(null);
     try {
+      // The SIP Payments log is already added up by the SIP Plans tab's formulas,
+      // so counting it as a holding of its own would double every SIP.
+      const holdings = sheets.filter((s) => !isSipPaymentsSheet(s.title));
       const all = await Promise.all(
-        sheets.map(async (s) => {
+        holdings.map(async (s) => {
           const data = await readSheet(ctx, s.title);
           // Only columns you typed as Money or Number get totalled.
           const totalable = data.headers.map((_, i) =>
@@ -77,12 +81,22 @@ function InvestmentSummary({
           const sumAt = (idx: number) =>
             idx < 0 ? undefined : data.rows.reduce((sum, r) => sum + (parseNumeric(r[idx]) ?? 0), 0);
 
+          // A SIP whose current value you haven't filled in yet counts at what went
+          // in, rather than as zero — which would show up as a 100% loss.
+          const currentValue =
+            isSipPlansSheet(s.title) && curIdx >= 0 && invIdx >= 0
+              ? data.rows.reduce(
+                  (sum, r) => sum + (parseNumeric(r[curIdx]) ?? parseNumeric(r[invIdx]) ?? 0),
+                  0,
+                )
+              : sumAt(curIdx);
+
           return {
             title: s.title,
             entries: data.rows.filter((r) => r.some((c) => c.trim())).length,
             totals,
             invested: sumAt(invIdx),
-            currentValue: sumAt(curIdx),
+            currentValue,
           } satisfies SheetSummary;
         }),
       );

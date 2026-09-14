@@ -150,6 +150,16 @@ export const IconBell = (p: P) => (
   </Svg>
 );
 
+/** Two arrows chasing each other — money that goes in on repeat, i.e. a SIP. */
+export const IconRepeat = (p: P) => (
+  <Svg {...p}>
+    <path d="M17 3.5 20 6.5l-3 3" />
+    <path d="M4 11.5V10a3.5 3.5 0 0 1 3.5-3.5H20" />
+    <path d="M7 20.5 4 17.5l3-3" />
+    <path d="M20 12.5V14a3.5 3.5 0 0 1-3.5 3.5H4" />
+  </Svg>
+);
+
 export const IconReceipt = (p: P) => (
   <Svg {...p}>
     <path d="M6 3.5 7.7 5l1.8-1.5L11.3 5 13 3.5 14.8 5l1.7-1.5V19a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2z" />

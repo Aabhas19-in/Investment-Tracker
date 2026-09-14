@@ -12,6 +12,18 @@ Two separate workbooks: one for investments, one for expenses.
 - Column types (Text / Money / Number / Percent / Date) stored as the sheet's own number format
 - A Summary tab that totals your Money and Number columns and spots invested vs current value
 
+**SIPs**
+
+- A pinned **SIP** chip on the Investments page opens a tracker for your monthly SIPs
+- Add each SIP once: fund, monthly amount, the day auto-pay debits it, and when it started
+- Every month, tap **Paid** once the debit has gone through, or **Missed** if it bounced or was paused
+- Each SIP shows this month's status and the last six months at a glance, with a full month-by-month history
+- Months whose debit date passed without being marked badge the SIP chip and the Investments tab
+- Adding a SIP that's already been running can mark its past instalments as paid in one go
+- Stored in two tabs the app creates: `SIP Plans`, where *Instalments paid* and *Amount invested* are live
+  formulas, and `SIP Payments`, one row per marked month. Both read fine in Google Sheets and Excel,
+  and the Summary tab counts SIPs with your other holdings
+
 **Expenses**
 
 - One tab per month (`Aug 2026`), created from a month picker
@@ -135,10 +147,11 @@ src/
                       add/rename/retype/delete columns and tabs. Every call hits the API.
   lib/columnTypes.ts  Column types <-> Google Sheets number formats.
   lib/expenses.ts     Month-tab naming, date parsing, category helpers.
+  lib/sip.ts          SIP tabs and columns, month-by-month status, the live formulas.
   lib/format.ts       Exact INR formatting and numeric parsing.
   lib/accent.ts       A stable colour per sheet and per category.
   lib/config.ts       The persisted settings.
-  components/         DataView + Manage + RowEditor (investments),
+  components/         DataView + Manage + RowEditor (investments), SipView (SIP tracker),
                       ExpensesView + ExpenseEditor (expenses),
                       Summary, Settings, Icons, UI primitives.
 ```
