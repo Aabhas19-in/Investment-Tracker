@@ -1,26 +1,34 @@
 import type { Formatters } from '../lib/format';
 import { accentFor } from '../lib/accent';
+import { IconClose } from './Icons';
 
 /**
  * Spend per category as circles of equal size — the percentage on each one
  * carries the comparison, so a big month and a small one read the same way.
  * Each bubble is labelled with its category, amount and share, so identity
  * never rests on colour alone.
+ *
+ * Tapping bubbles adds them up: pick as many as you like and the total above
+ * follows the selection. The ✕ drops the lot and shows the whole month again.
  */
 export function CategoryBubbles({
   totals,
   grandTotal,
   selected,
   fmt,
-  onSelect,
+  onToggle,
+  onClear,
 }: {
   totals: [string, number][];
   grandTotal: number;
-  selected: string | null;
+  /** Every category currently counted in. Empty means the whole month. */
+  selected: string[];
   fmt: Formatters;
-  onSelect: (name: string) => void;
+  onToggle: (name: string) => void;
+  onClear: () => void;
 }) {
   const SIZE = 100;
+  const picked = new Set(selected);
 
   return (
     <div>
@@ -28,12 +36,14 @@ export function CategoryBubbles({
         <h3 className="text-[0.68rem] font-extrabold tracking-widest text-muted uppercase">
           Where it went
         </h3>
-        {selected && (
+        {selected.length > 0 && (
           <button
-            onClick={() => onSelect(selected)}
-            className="press text-xs font-bold text-expense"
+            onClick={onClear}
+            aria-label="Clear selected categories"
+            className="press flex items-center gap-1.5 rounded-full bg-surface2 py-1 pr-2 pl-2.5 text-[0.68rem] font-extrabold text-ink2"
           >
-            Clear
+            {selected.length} selected
+            <IconClose className="size-3" strokeWidth={2.8} />
           </button>
         )}
       </div>
@@ -42,7 +52,7 @@ export function CategoryBubbles({
         {totals.map(([name, value], i) => {
           const color = accentFor(name);
           const share = grandTotal > 0 ? Math.round((value / grandTotal) * 100) : 0;
-          const on = selected === name;
+          const on = picked.has(name);
           const amount = fmt.money(value);
 
           // The full amount has to fit inside a circle, so step the type down
@@ -52,7 +62,8 @@ export function CategoryBubbles({
           return (
             <button
               key={name}
-              onClick={() => onSelect(name)}
+              onClick={() => onToggle(name)}
+              aria-pressed={on}
               title={`${name} · ${amount} · ${share}%`}
               style={{
                 width: SIZE,
@@ -64,7 +75,10 @@ export function CategoryBubbles({
               }}
               className="press animate-rise flex shrink-0 flex-col items-center justify-center gap-0.5 rounded-full px-2.5 text-center"
             >
-              <span className="w-full truncate text-[0.64rem] font-bold">{name}</span>
+              <span className="flex w-full items-center justify-center gap-1 text-[0.64rem] font-bold">
+                {on && <span aria-hidden>✓</span>}
+                <span className="truncate">{name}</span>
+              </span>
               <span
                 className="w-full font-extrabold tabular-nums"
                 style={{ fontSize: `${amountSize}rem` }}
@@ -78,7 +92,9 @@ export function CategoryBubbles({
       </div>
 
       <p className="mt-4 text-center text-[0.68rem] font-medium text-muted">
-        Tap a category to see it on its own
+        {selected.length === 0
+          ? 'Tap categories to add them up'
+          : 'Tap another to add it in, or tap a tick to drop it'}
       </p>
     </div>
   );

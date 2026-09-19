@@ -41,7 +41,8 @@ export function ExpenseSummary({
   const [months, setMonths] = useState<string[]>([]);
   const [month, setMonth] = useState<string | null>(null);
   const [data, setData] = useState<SheetData | null>(null);
-  const [filter, setFilter] = useState<string | null>(null);
+  /** Categories tapped into the total. Empty means the whole month. */
+  const [picked, setPicked] = useState<string[]>([]);
   const [incomeMonth, setIncomeMonth] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,7 +83,7 @@ export function ExpenseSummary({
   useEffect(() => {
     if (!month) return;
     let dead = false;
-    setFilter(null);
+    setPicked([]);
     setIncomeMonth(null);
 
     void (async () => {
@@ -113,13 +114,14 @@ export function ExpenseSummary({
   const catIdx = data ? findColumn(data.headers, CATEGORY_COLUMN, data.columnTypes) : -1;
 
   const amountOf = (row: string[]) => (amtIdx >= 0 ? (parseNumeric(row[amtIdx]) ?? 0) : 0);
+  const categoryOf = (row: string[]) => (catIdx >= 0 ? row[catIdx] : '').trim() || 'Uncategorised';
 
   /** Category totals, biggest first — months only. */
   const totals = useMemo<[string, number][]>(() => {
     if (!data || income) return [];
     const map = new Map<string, number>();
     for (const row of filled) {
-      const name = (catIdx >= 0 ? row[catIdx] : '').trim() || 'Uncategorised';
+      const name = categoryOf(row);
       map.set(name, (map.get(name) ?? 0) + amountOf(row));
     }
     return [...map.entries()].sort((a, b) => b[1] - a[1]);
@@ -175,7 +177,19 @@ export function ExpenseSummary({
   const grandTotal = income
     ? visibleIncome.reduce((s, r) => s + r.amount, 0)
     : totals.reduce((s, [, v]) => s + v, 0);
-  const focused = filter ? (totals.find(([n]) => n === filter)?.[1] ?? 0) : grandTotal;
+
+  // Picking categories adds them together; picking none is the whole month.
+  const chosen = useMemo(() => new Set(picked), [picked]);
+  const focused = picked.length
+    ? totals.reduce((sum, [name, value]) => sum + (chosen.has(name) ? value : 0), 0)
+    : grandTotal;
+  const focusedCount = picked.length
+    ? filled.filter((row) => chosen.has(categoryOf(row))).length
+    : filled.length;
+  const focusedShare = grandTotal > 0 ? Math.round((focused / grandTotal) * 100) : 0;
+
+  const toggleCategory = (name: string) =>
+    setPicked((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]));
 
   if (!spreadsheetId) {
     return (
@@ -244,9 +258,11 @@ export function ExpenseSummary({
                 ? incomeMonth
                   ? `Income · ${incomeMonth}`
                   : 'Total income'
-                : filter
-                  ? `${filter} · ${month}`
-                  : `Spent in ${month}`}
+                : picked.length === 0
+                  ? `Spent in ${month}`
+                  : picked.length === 1
+                    ? `${picked[0]} · ${month}`
+                    : `${picked.length} categories · ${month}`}
             </p>
             <p className="mt-1.5 text-[2.2rem] leading-none font-extrabold tracking-tight tabular-nums">
               {fmt.money(focused)}
@@ -254,8 +270,10 @@ export function ExpenseSummary({
             <p className="mt-2 text-xs font-semibold text-white/75">
               {income
                 ? `${visibleIncome.length} ${visibleIncome.length === 1 ? 'entry' : 'entries'} · ${incomeMonths.length} ${incomeMonths.length === 1 ? 'month' : 'months'}`
-                : `${filled.length} ${filled.length === 1 ? 'expense' : 'expenses'} · ${totals.length} ${
-                    totals.length === 1 ? 'category' : 'categories'
+                : `${focusedCount} ${focusedCount === 1 ? 'expense' : 'expenses'} · ${
+                    picked.length
+                      ? `${focusedShare}% of ${month}`
+                      : `${totals.length} ${totals.length === 1 ? 'category' : 'categories'}`
                   }`}
             </p>
           </div>
@@ -298,9 +316,10 @@ export function ExpenseSummary({
               <CategoryBubbles
                 totals={totals}
                 grandTotal={grandTotal}
-                selected={filter}
+                selected={picked}
                 fmt={fmt}
-                onSelect={(name) => setFilter(filter === name ? null : name)}
+                onToggle={toggleCategory}
+                onClear={() => setPicked([])}
               />
             </div>
           )}
