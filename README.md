@@ -1,41 +1,35 @@
 # Investment & Expense Tracker
 
-A mobile-first React app that keeps **all** of your data in your own Google Sheets.
-No backend, no database, no server-side code — the browser talks to the Google Sheets API directly.
-Two separate workbooks: one for investments, one for expenses.
+A mobile-first React app with no backend, no database and no server-side code.
+Your expenses live in your own Google Sheet, which the browser talks to directly.
+Your holdings come from a statement file you upload, read inside the browser tab.
 
-**Investments**
+**Investments** — your holdings, read from a statement you upload
 
-- Create a new sheet (tab) per asset — Gold, Stocks, Mutual Funds, anything — from the UI
-- Add, rename, retype and delete columns per sheet, from the UI
-- Add, edit and delete rows; values starting with `=` become live spreadsheet formulas
-- Column types (Text / Money / Number / Percent / Date) stored as the sheet's own number format
-- A Summary tab that totals your Money and Number columns and spots invested vs current value
-
-**SIPs**
-
-- A pinned **SIP** chip on the Investments page opens a tracker for your monthly SIPs
-- Add each SIP once: fund, monthly amount, the day auto-pay debits it, and when it started
-- Every month, tap **Paid** once the debit has gone through, or **Missed** if it bounced or was paused
-- Each SIP shows this month's status and the last six months at a glance, with a full month-by-month history
-- Months whose debit date passed without being marked badge the SIP chip and the Investments tab
-- Adding a SIP that's already been running can mark its past instalments as paid in one go
-- Stored in two tabs the app creates: `SIP Plans`, where *Instalments paid* and *Amount invested* are live
-  formulas, and `SIP Payments`, one row per marked month. Both read fine in Google Sheets and Excel,
-  and the Summary tab counts SIPs with your other holdings
+- Upload the `.xlsx` (or `.csv`) holdings statement your broker gives you — Zerodha Console's
+  Equity / Mutual Funds / Combined export is what it's built around
+- Present value, invested and unrealised P&L per statement, straight from its own summary
+- Every holding with quantity, average price, last price, value and return; tap one for the rest,
+  ISIN included
+- A split of where the money sits, by sector for shares and by scheme type for funds
+- Sort by value, gain or name, and switch between the Equity, Mutual Funds and Combined sheets
+- The file is read inside the browser tab. It is never uploaded anywhere and never written to a
+  spreadsheet. The last statement you opened is remembered on that device only, so the tab isn't
+  empty when you come back
 
 **Expenses**
 
 - One tab per month (`Aug 2026`), created from a month picker
 - A mandatory Date column, pre-filled with today and freely back-datable
 - Your own categories, managed in a `Categories` tab and picked as tags when logging
-- Spend broken down by category as bubbles, with exact amounts and shares
+- Spend broken down by category as bubbles: tap several to add them up, tap the ✕ to clear
 
-Both workbooks can be opened in Google Sheets or downloaded as a real `.xlsx` at any time.
+The expenses workbook can be opened in Google Sheets or downloaded as a real `.xlsx` at any time.
 
-**What the app stores:** a handful of settings in `localStorage` — the two spreadsheet IDs, the
-OAuth client ID, the theme, and which totals you've dismissed. Nothing else. No rows, no totals,
-no access token. The Google token lives in a JavaScript variable and dies with the tab.
+**What the app stores:** in `localStorage`, a handful of settings — the expenses spreadsheet ID,
+the OAuth client ID and the theme — plus the last holdings statement you opened, so that tab isn't
+empty when you come back. No expense rows, and no access token: the Google token lives in a
+JavaScript variable and dies with the tab.
 
 ---
 
@@ -147,13 +141,14 @@ src/
                       add/rename/retype/delete columns and tabs. Every call hits the API.
   lib/columnTypes.ts  Column types <-> Google Sheets number formats.
   lib/expenses.ts     Month-tab naming, date parsing, category helpers.
-  lib/sip.ts          SIP tabs and columns, month-by-month status, the live formulas.
+  lib/xlsx.ts         Reads an .xlsx (a zip of XML) or .csv in the browser, no dependencies.
+  lib/holdings.ts     Turns a broker's holdings statement into sections, lines and totals.
   lib/format.ts       Exact INR formatting and numeric parsing.
   lib/accent.ts       A stable colour per sheet and per category.
   lib/config.ts       The persisted settings.
-  components/         DataView + Manage + RowEditor (investments), SipView (SIP tracker),
-                      ExpensesView + ExpenseEditor (expenses),
-                      Summary, Settings, Icons, UI primitives.
+  components/         HoldingsView (the uploaded statement),
+                      ExpensesView + ExpenseEditor + Manage (expenses),
+                      Settings, Icons, UI primitives.
 ```
 
 ### Live formulas

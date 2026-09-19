@@ -123,6 +123,14 @@ export const IconDownload = (p: P) => (
   </Svg>
 );
 
+export const IconUpload = (p: P) => (
+  <Svg {...p}>
+    <path d="M12 20V9" />
+    <path d="m8 13 4-4 4 4" />
+    <path d="M5 5h14" />
+  </Svg>
+);
+
 export const IconArrowUp = (p: P) => (
   <Svg {...p}>
     <path d="M12 19V6" />
