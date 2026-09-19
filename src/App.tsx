@@ -1,8 +1,9 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import type { Tab } from './types';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import type { SheetMeta, Tab } from './types';
 import { useConfig } from './lib/config';
 import { CURRENCY } from './lib/format';
 import { isSignedIn, onAuthChange, signIn } from './lib/googleAuth';
+import * as api from './lib/sheets';
 import { Banner, Button } from './components/UI';
 import {
   IconChart,
@@ -12,7 +13,7 @@ import {
   IconWallet,
   TreeArt,
 } from './components/Icons';
-import { HoldingsView } from './components/HoldingsView';
+import { InvestmentsView } from './components/InvestmentsView';
 import { ExpensesView } from './components/ExpensesView';
 import { ExpenseSummary } from './components/ExpenseSummary';
 import { Settings } from './components/Settings';
@@ -44,6 +45,8 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('data');
   const [signedIn, setSignedIn] = useState(isSignedIn);
   const [error, setError] = useState<string | null>(null);
+  /** Tabs in the investment workbook, so the saved-statements screen can find its own. */
+  const [sheets, setSheets] = useState<SheetMeta[]>([]);
 
   // Signing in is what the expense sheets need; holdings are read from a file
   // you pick, so that tab works whatever the spreadsheets are doing.
@@ -53,6 +56,19 @@ export default function App() {
     const off = onAuthChange(setSignedIn);
     return () => void off();
   }, []);
+
+  const loadSheets = useCallback(async () => {
+    if (!config.spreadsheetId || !config.clientId) return;
+    try {
+      setSheets(await api.listSheets({ clientId: config.clientId, spreadsheetId: config.spreadsheetId }));
+    } catch {
+      /* the investments screen shows its own error when it reads */
+    }
+  }, [config.clientId, config.spreadsheetId]);
+
+  useEffect(() => {
+    if (signedIn) void loadSheets();
+  }, [signedIn, loadSheets]);
 
   if (!configured) {
     return (
@@ -143,7 +159,15 @@ export default function App() {
         </div>
       }
     >
-      {tab === 'data' && <HoldingsView currency={CURRENCY} />}
+      {tab === 'data' && (
+        <InvestmentsView
+          clientId={config.clientId}
+          spreadsheetId={config.spreadsheetId}
+          currency={CURRENCY}
+          sheets={sheets}
+          onSheetsChanged={loadSheets}
+        />
+      )}
 
       {tab === 'expenses' && (
         <ExpensesView

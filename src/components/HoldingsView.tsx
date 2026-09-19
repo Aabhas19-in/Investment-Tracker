@@ -3,9 +3,7 @@ import { makeFormatters, type CurrencyCode, type Formatters } from '../lib/forma
 import { accentFor, initials } from '../lib/accent';
 import { MONTH_ABBR, parseSheetDate } from '../lib/dates';
 import {
-  loadHoldings,
   parseHoldings,
-  saveHoldings,
   sectionTotals,
   splitByCategory,
   type HoldingLine,
@@ -28,8 +26,6 @@ function prettyDate(value: string | null): string | null {
 const qty = (n: number) =>
   n.toLocaleString('en-IN', { maximumFractionDigits: Number.isInteger(n) ? 0 : 3 });
 
-type Sort = 'value' | 'gain' | 'name';
-
 /**
  * Your holdings, read from a statement you upload.
  *
@@ -37,12 +33,33 @@ type Sort = 'value' | 'gain' | 'name';
  * written to your spreadsheets. The last one you opened is remembered on this
  * device so the tab isn't empty when you come back.
  */
-export function HoldingsView({ currency }: { currency: CurrencyCode }) {
+export interface SaveStatus {
+  state: 'saving' | 'saved' | 'failed' | 'unsaved';
+  /** Why the last save didn't work, when it didn't. */
+  message: string | null;
+  /** Whether an investment sheet is linked at all. */
+  linked: boolean;
+  /** "19 Sep 2026 · 13 rows", for the line under the file name. */
+  detail: string;
+  onRetry: () => void;
+}
+
+export function HoldingsView({
+  currency,
+  file,
+  onFile,
+  save,
+}: {
+  currency: CurrencyCode;
+  /** The statement on screen, held by the parent so both tabs see it. */
+  file: HoldingsFile | null;
+  onFile: (next: HoldingsFile | null) => void;
+  /** How filing it into the investment sheet is going. */
+  save: SaveStatus;
+}) {
   const fmt = useMemo(() => makeFormatters(currency), [currency]);
 
-  const [file, setFile] = useState<HoldingsFile | null>(() => loadHoldings());
   const [sectionName, setSectionName] = useState<string | null>(null);
-  const [sort, setSort] = useState<Sort>('value');
   const [detail, setDetail] = useState<HoldingLine | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,10 +83,9 @@ export function HoldingsView({ currency }: { currency: CurrencyCode }) {
     try {
       const sheets = await readSpreadsheetFile(picked);
       const parsed = parseHoldings(sheets, picked.name, new Date());
-      setFile(parsed);
+      onFile(parsed);
       setSectionName(pickDefault(parsed));
       setDetail(null);
-      saveHoldings(parsed);
     } catch (e) {
       setError(errorText(e));
     } finally {
@@ -79,19 +95,51 @@ export function HoldingsView({ currency }: { currency: CurrencyCode }) {
   };
 
   const clear = () => {
-    setFile(null);
+    onFile(null);
     setSectionName(null);
     setDetail(null);
-    saveHoldings(null);
   };
 
-  const lines = useMemo(() => {
-    const list = [...(section?.lines ?? [])];
-    if (sort === 'value') list.sort((a, b) => b.value - a.value);
-    else if (sort === 'gain') list.sort((a, b) => (b.pnlPct ?? -Infinity) - (a.pnlPct ?? -Infinity));
-    else list.sort((a, b) => a.name.localeCompare(b.name));
-    return list;
-  }, [section, sort]);
+  // Biggest first: what you hold most of is what you care about most.
+  const lines = useMemo(
+    () => [...(section?.lines ?? [])].sort((a, b) => b.value - a.value),
+    [section],
+  );
+
+  /** The three worth knowing without reading the whole list. */
+  const highlights = useMemo(() => {
+    if (lines.length === 0) return [];
+    const total = lines.reduce((sum, l) => sum + l.value, 0);
+    const byReturn = [...lines]
+      .filter((l) => l.pnlPct != null)
+      .sort((a, b) => (b.pnlPct ?? 0) - (a.pnlPct ?? 0));
+
+    const out: { label: string; line: HoldingLine; note: string; tone: 'plain' | 'pos' | 'neg' }[] = [
+      {
+        label: 'Biggest',
+        line: lines[0],
+        note: total > 0 ? `${Math.round((lines[0].value / total) * 100)}%` : fmt.money(lines[0].value),
+        tone: 'plain',
+      },
+    ];
+    if (byReturn.length > 1) {
+      const best = byReturn[0];
+      const worst = byReturn[byReturn.length - 1];
+      out.push({
+        label: 'Best',
+        line: best,
+        note: fmt.pct(Number((best.pnlPct ?? 0).toFixed(2))),
+        tone: (best.pnlPct ?? 0) >= 0 ? 'pos' : 'neg',
+      });
+      out.push({
+        label: 'Worst',
+        line: worst,
+        note: fmt.pct(Number((worst.pnlPct ?? 0).toFixed(2))),
+        tone: (worst.pnlPct ?? 0) >= 0 ? 'pos' : 'neg',
+      });
+    }
+    return out;
+  }, [lines, fmt]);
 
   const slices = useMemo(() => splitByCategory(section?.lines ?? []), [section]);
   const totals = section ? sectionTotals(section) : null;
@@ -132,25 +180,28 @@ export function HoldingsView({ currency }: { currency: CurrencyCode }) {
           <Dropzone dragging={dragging} onPick={() => inputRef.current?.click()} />
         ) : (
           <div className="px-4 pb-32">
-            {/* Where the file came from */}
-            <div className="flex items-center gap-3 rounded-2xl border border-line bg-surface px-4 py-3 shadow-soft">
-              <span className="block min-w-0 flex-1">
-                <span className="block truncate text-sm font-bold">{file.fileName}</span>
-                <span className="block truncate text-xs font-medium text-muted">
-                  {[
-                    prettyDate(file.asOn) && `As on ${prettyDate(file.asOn)}`,
-                    file.clientId && `Client ${file.clientId}`,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
+            {/* Where the file came from, and whether it's in the sheet yet */}
+            <div className="rounded-2xl border border-line bg-surface px-4 py-3 shadow-soft">
+              <div className="flex items-center gap-3">
+                <span className="block min-w-0 flex-1">
+                  <span className="block truncate text-sm font-bold">{file.fileName}</span>
+                  <span className="block truncate text-xs font-medium text-muted">
+                    {[
+                      prettyDate(file.asOn) && `As on ${prettyDate(file.asOn)}`,
+                      file.clientId && `Client ${file.clientId}`,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
                 </span>
-              </span>
-              <button
-                onClick={() => inputRef.current?.click()}
-                className="press shrink-0 rounded-xl border border-line px-3 py-2 text-xs font-bold text-ink2"
-              >
-                Replace
-              </button>
+                <button
+                  onClick={() => inputRef.current?.click()}
+                  className="press shrink-0 rounded-xl border border-line px-3 py-2 text-xs font-bold text-ink2"
+                >
+                  Replace
+                </button>
+              </div>
+              <SaveLine save={save} />
             </div>
 
             {/* Which statement */}
@@ -211,23 +262,39 @@ export function HoldingsView({ currency }: { currency: CurrencyCode }) {
 
                 {slices.length > 1 && <Split slices={slices} fmt={fmt} />}
 
-                {/* The holdings themselves */}
-                <div className="mt-4 flex items-center gap-2">
-                  <p className="min-w-0 flex-1 text-sm font-bold">
-                    {plural(section.lines.length, 'holding')}
-                  </p>
-                  {(['value', 'gain', 'name'] as Sort[]).map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => setSort(s)}
-                      className={`press rounded-xl border px-3 py-2 text-xs font-bold capitalize ${
-                        sort === s ? 'border-brand bg-brandsoft text-brand' : 'border-line text-muted'
-                      }`}
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
+                {/* Worth knowing before you read the list */}
+                {highlights.length > 0 && (
+                  <ul className="mt-3 overflow-hidden rounded-card bg-surface shadow-card">
+                    {highlights.map((h, i) => (
+                      <li key={h.label} className={i > 0 ? 'border-t border-line' : ''}>
+                        <button
+                          onClick={() => setDetail(h.line)}
+                          className="flex w-full items-center gap-3 px-4 py-2.5 text-left"
+                        >
+                          <span className="w-14 shrink-0 text-[0.62rem] font-extrabold tracking-wider text-muted uppercase">
+                            {h.label}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate text-sm font-bold">
+                            {h.line.name}
+                          </span>
+                          <span
+                            className={`shrink-0 text-xs font-extrabold tabular-nums ${
+                              h.tone === 'pos' ? 'text-pos' : h.tone === 'neg' ? 'text-neg' : 'text-ink2'
+                            }`}
+                          >
+                            {h.note}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {/* The holdings themselves, biggest first */}
+                <p className="mt-4 px-1 text-sm font-bold">
+                  {plural(section.lines.length, 'holding')}
+                  <span className="font-medium text-muted"> · biggest first</span>
+                </p>
 
                 <ul className="mt-3 overflow-hidden rounded-card bg-surface shadow-card">
                   {lines.map((l, i) => (
@@ -254,6 +321,55 @@ export function HoldingsView({ currency }: { currency: CurrencyCode }) {
       </div>
 
       <LineDetail l={detail} fmt={fmt} onClose={() => setDetail(null)} />
+    </div>
+  );
+}
+
+/** One line: filed, filing, or what went wrong — never a button you must press. */
+function SaveLine({ save }: { save: SaveStatus }) {
+  if (!save.linked) {
+    return (
+      <p className="mt-2 border-t border-line pt-2 text-xs font-medium text-muted">
+        Link your investment sheet in Settings to keep statements.
+      </p>
+    );
+  }
+
+  if (save.state === 'failed') {
+    return (
+      <button
+        onClick={save.onRetry}
+        className="press mt-2 flex w-full items-center gap-2 border-t border-line pt-2 text-left"
+      >
+        <span className="min-w-0 flex-1 truncate text-xs font-bold text-neg">
+          Couldn’t save to your sheet
+        </span>
+        <span className="shrink-0 text-xs font-bold text-brand">Try again</span>
+      </button>
+    );
+  }
+
+  const text =
+    save.state === 'saving'
+      ? 'Saving to your sheet…'
+      : save.state === 'saved'
+        ? `✓ In your sheet${save.detail ? ` · ${save.detail}` : ''}`
+        : 'Not in your sheet yet';
+
+  return (
+    <div className="mt-2 flex items-center gap-2 border-t border-line pt-2">
+      <p
+        className={`min-w-0 flex-1 truncate text-xs font-semibold ${
+          save.state === 'saved' ? 'text-pos' : 'text-muted'
+        }`}
+      >
+        {text}
+      </p>
+      {save.state === 'unsaved' && (
+        <button onClick={save.onRetry} className="press shrink-0 text-xs font-bold text-brand">
+          Save
+        </button>
+      )}
     </div>
   );
 }
@@ -348,7 +464,7 @@ function LineRow({
         <Badge text={initials(l.name)} color={accentFor(l.category || l.name)} size="sm" />
         <span className="block min-w-0 flex-1">
           {/* Fund names are long; two lines beats an ellipsis on a phone. */}
-          <span className="line-clamp-2 block text-sm leading-snug font-bold">{l.name}</span>
+          <span className="line-clamp-2 text-sm leading-snug font-bold">{l.name}</span>
           <span className="mt-0.5 block truncate text-xs font-medium text-muted">
             {qty(l.quantity)} × {fmt.money(l.avgPrice)}
             {l.category ? ` · ${l.category}` : ''}

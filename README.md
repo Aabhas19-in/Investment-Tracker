@@ -4,18 +4,32 @@ A mobile-first React app with no backend, no database and no server-side code.
 Your expenses live in your own Google Sheet, which the browser talks to directly.
 Your holdings come from a statement file you upload, read inside the browser tab.
 
-**Investments** — your holdings, read from a statement you upload
+**Investments** — two tabs: the statement you upload, and everything you've saved
 
-- Upload the `.xlsx` (or `.csv`) holdings statement your broker gives you — Zerodha Console's
-  Equity / Mutual Funds / Combined export is what it's built around
+*Statement* — the file your broker gives you
+
+- Upload the `.xlsx` (or `.csv`) holdings statement — Zerodha Console's Equity / Mutual Funds /
+  Combined export is what it's built around
 - Present value, invested and unrealised P&L per statement, straight from its own summary
 - Every holding with quantity, average price, last price, value and return; tap one for the rest,
   ISIN included
 - A split of where the money sits, by sector for shares and by scheme type for funds
-- Sort by value, gain or name, and switch between the Equity, Mutual Funds and Combined sheets
-- The file is read inside the browser tab. It is never uploaded anywhere and never written to a
-  spreadsheet. The last statement you opened is remembered on that device only, so the tab isn't
-  empty when you come back
+- Your biggest holding, your best and your worst, each one tap from its own detail; the list
+  itself runs biggest first
+- The file is read inside the browser tab, never uploaded. The last one stays on that device so
+  the tab isn't empty when you come back
+
+*Saved* — your investment sheet, the parent record
+
+- Opening a statement files it into the sheet by itself, under its own date. There's no button to
+  press; the file card says whether it's in the sheet, and offers a retry if it couldn't be
+  (offline, say). Opening the same date again replaces it rather than doubling it up
+- Two tabs are written: `Snapshots` (one row per statement — invested, value, P&L, holdings count)
+  and `Holdings Log` (one row per holding per statement)
+- Which is what a broker can't show you: value over time, and what changed since the last
+  statement — split into the money you added and what the market did on its own
+- Holding by holding, the change in value and in units since last time, what's new, and what's
+  gone. Tap one to see it beside its previous figures
 
 **Expenses**
 
@@ -143,10 +157,12 @@ src/
   lib/expenses.ts     Month-tab naming, date parsing, category helpers.
   lib/xlsx.ts         Reads an .xlsx (a zip of XML) or .csv in the browser, no dependencies.
   lib/holdings.ts     Turns a broker's holdings statement into sections, lines and totals.
+  lib/holdingsSheet.ts  The Snapshots and Holdings Log tabs: what's written, read and compared.
+  lib/sheetTabs.ts    Shared helpers for the tabs the app writes itself.
   lib/format.ts       Exact INR formatting and numeric parsing.
   lib/accent.ts       A stable colour per sheet and per category.
   lib/config.ts       The persisted settings.
-  components/         HoldingsView (the uploaded statement),
+  components/         InvestmentsView (the two tabs) + HoldingsView + SavedHoldings,
                       ExpensesView + ExpenseEditor + Manage (expenses),
                       Settings, Icons, UI primitives.
 ```

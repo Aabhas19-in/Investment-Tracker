@@ -54,12 +54,14 @@ export function Settings({
   setConfig: (patch: Partial<AppConfig>) => void;
   signedIn: boolean;
 }) {
+  const [sheetInput, setSheetInput] = useState(config.spreadsheetId);
   const [expensesInput, setExpensesInput] = useState(config.expensesSpreadsheetId);
   const [clientInput, setClientInput] = useState(config.clientId);
   const [saved, setSaved] = useState(false);
 
   const save = () => {
     setConfig({
+      spreadsheetId: extractSpreadsheetId(sheetInput),
       expensesSpreadsheetId: extractSpreadsheetId(expensesInput),
       clientId: clientInput.trim(),
     });
@@ -93,8 +95,20 @@ export function Settings({
       <Section title="Connection">
         <div className="space-y-5">
           <Field
+            label="Investment spreadsheet"
+            hint="Paste the full Google Sheets URL or just its ID. Every holdings statement you save is filed here, statement by statement."
+          >
+            <input
+              className={inputClass}
+              value={sheetInput}
+              placeholder="https://docs.google.com/spreadsheets/d/…"
+              onChange={(e) => setSheetInput(e.target.value)}
+            />
+          </Field>
+
+          <Field
             label="Expenses spreadsheet"
-            hint="Paste the full Google Sheets URL or just its ID. This is the workbook the Expenses tab writes to, with one sheet per month."
+            hint="A separate workbook for the Expenses tab, with one sheet per month."
           >
             <input
               className={inputClass}
@@ -122,6 +136,12 @@ export function Settings({
           {saved && <Banner kind="info">Saved.</Banner>}
         </div>
       </Section>
+
+      {config.spreadsheetId && (
+        <Section title="Investment sheet">
+          <SheetLinks id={config.spreadsheetId} />
+        </Section>
+      )}
 
       {config.expensesSpreadsheetId && (
         <Section title="Expenses sheet">
