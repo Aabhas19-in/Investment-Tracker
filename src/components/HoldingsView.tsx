@@ -11,6 +11,7 @@ import {
 } from '../lib/holdings';
 import { readSpreadsheetFile } from '../lib/xlsx';
 import { Badge, Banner, Sheet, Spinner } from './UI';
+import { GroupCard } from './GroupCard';
 import { IconArrowDown, IconArrowUp, IconTrash, IconUpload } from './Icons';
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -105,6 +106,25 @@ export function HoldingsView({
     () => [...(section?.lines ?? [])].sort((a, b) => b.value - a.value),
     [section],
   );
+
+  /**
+   * Like with like: two large cap funds belong next to each other, with what
+   * the pair is worth. Biggest group first, and biggest holding within it.
+   */
+  const groups = useMemo(() => {
+    const map = new Map<string, HoldingLine[]>();
+    for (const l of lines) {
+      const label = l.category || 'Uncategorised';
+      map.set(label, [...(map.get(label) ?? []), l]);
+    }
+    const total = lines.reduce((sum, l) => sum + l.value, 0);
+    return [...map.entries()]
+      .map(([label, items]) => {
+        const value = items.reduce((sum, l) => sum + l.value, 0);
+        return { label, items, value, share: total > 0 ? (value / total) * 100 : 0 };
+      })
+      .sort((a, b) => b.value - a.value);
+  }, [lines]);
 
   /** The three worth knowing without reading the whole list. */
   const highlights = useMemo(() => {
@@ -290,17 +310,39 @@ export function HoldingsView({
                   </ul>
                 )}
 
-                {/* The holdings themselves, biggest first */}
+                {/* The holdings themselves, like with like */}
                 <p className="mt-4 px-1 text-sm font-bold">
                   {plural(section.lines.length, 'holding')}
-                  <span className="font-medium text-muted"> · biggest first</span>
+                  <span className="font-medium text-muted">
+                    {' '}
+                    in {plural(groups.length, 'group')}
+                  </span>
                 </p>
 
-                <ul className="mt-3 overflow-hidden rounded-card bg-surface shadow-card">
-                  {lines.map((l, i) => (
-                    <LineRow key={`${l.isin}-${l.name}`} l={l} fmt={fmt} first={i === 0} onOpen={() => setDetail(l)} />
+                <div className="mt-3 space-y-3">
+                  {groups.map((g) => (
+                    <GroupCard
+                      key={g.label}
+                      label={g.label}
+                      count={g.items.length}
+                      value={fmt.money(g.value)}
+                      share={g.share}
+                      note={`${Math.round(g.share)}% of this`}
+                    >
+                      <ul>
+                        {g.items.map((l) => (
+                          <LineRow
+                            key={`${l.isin}-${l.name}`}
+                            l={l}
+                            fmt={fmt}
+                            first={false}
+                            onOpen={() => setDetail(l)}
+                          />
+                        ))}
+                      </ul>
+                    </GroupCard>
                   ))}
-                </ul>
+                </div>
 
                 <button
                   onClick={clear}
@@ -466,8 +508,7 @@ function LineRow({
           {/* Fund names are long; two lines beats an ellipsis on a phone. */}
           <span className="line-clamp-2 text-sm leading-snug font-bold">{l.name}</span>
           <span className="mt-0.5 block truncate text-xs font-medium text-muted">
-            {qty(l.quantity)} × {fmt.money(l.avgPrice)}
-            {l.category ? ` · ${l.category}` : ''}
+            {qty(l.quantity)} × {fmt.money(l.avgPrice)} · {fmt.money(l.invested)} in
           </span>
         </span>
         <span className="block shrink-0 text-right">

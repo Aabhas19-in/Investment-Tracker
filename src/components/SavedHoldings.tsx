@@ -13,6 +13,7 @@ import {
   type Snapshot,
 } from '../lib/holdingsSheet';
 import { Badge, Banner, Button, Empty, IconButton, Sheet, Spinner } from './UI';
+import { GroupCard } from './GroupCard';
 import { IconArrowDown, IconArrowUp, IconExternal, IconRefresh, IconUpload } from './Icons';
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
@@ -83,6 +84,28 @@ export function SavedHoldings({
     () => goneSince(log, selected?.date ?? null, previous?.date ?? null),
     [log, selected, previous],
   );
+
+  /** Like with like, the same way the statement lists them. */
+  const groups = useMemo(() => {
+    const map = new Map<string, HoldingChange[]>();
+    for (const c of changes) {
+      const label = c.now.category || 'Uncategorised';
+      map.set(label, [...(map.get(label) ?? []), c]);
+    }
+    const total = changes.reduce((sum, c) => sum + c.now.value, 0);
+    return [...map.entries()]
+      .map(([label, items]) => {
+        const value = items.reduce((sum, c) => sum + c.now.value, 0);
+        return {
+          label,
+          items,
+          value,
+          share: total > 0 ? (value / total) * 100 : 0,
+          moved: items.reduce((sum, c) => sum + (c.valueChange ?? 0), 0),
+        };
+      })
+      .sort((a, b) => b.value - a.value);
+  }, [changes]);
 
   if (!spreadsheetId) {
     return (
@@ -206,9 +229,12 @@ export function SavedHoldings({
 
             {/* Holding by holding */}
             <div className="mt-5 flex items-center gap-2">
-              <p className="min-w-0 flex-1 text-sm font-bold">
+              <p className="min-w-0 flex-1 truncate text-sm font-bold">
                 {plural(changes.length, 'holding')}
-                {previous && <span className="font-medium text-muted"> · change since last</span>}
+                <span className="font-medium text-muted">
+                  {' '}
+                  in {plural(groups.length, 'group')}
+                </span>
               </p>
               <IconButton label="Refresh" onClick={onRefresh}>
                 <IconRefresh />
@@ -226,11 +252,35 @@ export function SavedHoldings({
               )}
             </div>
 
-            <ul className="mt-3 overflow-hidden rounded-card bg-surface shadow-card">
-              {changes.map((c, i) => (
-                <ChangeRow key={c.now.key + i} c={c} fmt={fmt} first={i === 0} onOpen={() => setDetail(c)} />
+            <div className="mt-3 space-y-3">
+              {groups.map((g) => (
+                <GroupCard
+                  key={g.label}
+                  label={g.label}
+                  count={g.items.length}
+                  value={fmt.money(g.value)}
+                  share={g.share}
+                  note={
+                    previous && g.moved !== 0
+                      ? `${g.moved >= 0 ? '▲' : '▼'} ${fmt.money(Math.abs(g.moved))}`
+                      : `${Math.round(g.share)}% of this`
+                  }
+                  noteTone={previous && g.moved !== 0 ? (g.moved >= 0 ? 'pos' : 'neg') : 'muted'}
+                >
+                  <ul>
+                    {g.items.map((c, i) => (
+                      <ChangeRow
+                        key={c.now.key + i}
+                        c={c}
+                        fmt={fmt}
+                        first={false}
+                        onOpen={() => setDetail(c)}
+                      />
+                    ))}
+                  </ul>
+                </GroupCard>
               ))}
-            </ul>
+            </div>
 
             {gone.length > 0 && (
               <>

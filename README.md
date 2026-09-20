@@ -14,8 +14,10 @@ Your holdings come from a statement file you upload, read inside the browser tab
 - Every holding with quantity, average price, last price, value and return; tap one for the rest,
   ISIN included
 - A split of where the money sits, by sector for shares and by scheme type for funds
-- Your biggest holding, your best and your worst, each one tap from its own detail; the list
-  itself runs biggest first
+- Your biggest holding, your best and your worst, each one tap from its own detail
+- Holdings grouped like with like, each group a card in its own colour: the name (Flexi Cap) with
+  its family underneath (Equity), how many are in it, what the group is worth, and a hairline
+  showing its share of the whole. Biggest group first
 - The file is read inside the browser tab, never uploaded. The last one stays on that device so
   the tab isn't empty when you come back
 
@@ -29,7 +31,8 @@ Your holdings come from a statement file you upload, read inside the browser tab
 - Which is what a broker can't show you: value over time, and what changed since the last
   statement — split into the money you added and what the market did on its own
 - Holding by holding, the change in value and in units since last time, what's new, and what's
-  gone. Tap one to see it beside its previous figures
+  gone — grouped by category, each group showing how far it moved. Tap one to see it beside its
+  previous figures
 
 **Themes** — two light ones, no dark mode: *Light* (cool and white) and *Legacy* (the warm cream
 the app started with). Picked under Settings → Appearance, and the app stays light whatever the
