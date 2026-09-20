@@ -31,6 +31,10 @@ Your holdings come from a statement file you upload, read inside the browser tab
 - Holding by holding, the change in value and in units since last time, what's new, and what's
   gone. Tap one to see it beside its previous figures
 
+**Themes** — two light ones, no dark mode: *Light* (cool and white) and *Legacy* (the warm cream
+the app started with). Picked under Settings → Appearance, and the app stays light whatever the
+phone is set to.
+
 **Expenses**
 
 - One tab per month (`Aug 2026`), created from a month picker
@@ -41,7 +45,7 @@ Your holdings come from a statement file you upload, read inside the browser tab
 The expenses workbook can be opened in Google Sheets or downloaded as a real `.xlsx` at any time.
 
 **What the app stores:** in `localStorage`, a handful of settings — the expenses spreadsheet ID,
-the OAuth client ID and the theme — plus the last holdings statement you opened, so that tab isn't
+the OAuth client ID and which of the two light themes you picked — plus the last holdings statement you opened, so that tab isn't
 empty when you come back. No expense rows, and no access token: the Google token lives in a
 JavaScript variable and dies with the tab.
 

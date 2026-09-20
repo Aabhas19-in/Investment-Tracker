@@ -1,10 +1,41 @@
 @import 'tailwindcss';
 
 /* ---------------------------------------------------------------- palette
-   Warm cream by day, aubergine by night — never flat grey. Every colour is a
-   token so the whole app switches theme without a single `dark:` class. */
+   Two light themes, no dark one. Daylight is cool and white; Legacy is the
+   warm cream the app started with. Every colour is a token, so switching is
+   one attribute on the root and not a single `dark:` class anywhere.
 
-:root {
+   `color-scheme: light` keeps form controls — date pickers especially — light
+   even when the phone itself is set to dark. */
+
+:root,
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --bg: #eef2f7;
+  --bg-glow-a: #cfe2ff;
+  --bg-glow-b: #d2efe1;
+  --surface: #ffffff;
+  --surface-2: #e7ecf4;
+  --ink: #0f172a;
+  --ink-2: #3f4b5e;
+  --muted: #76839a;
+  --line: #dde4ee;
+  --brand: #1f7a5a;
+  --brand-soft: #e1f0e9;
+  --on-brand: #ffffff;
+  --pos: #0f9d6b;
+  --neg: #dd3b57;
+  /* Same green as the sign-in tree, so the CTA belongs to the illustration. */
+  --leaf: #4f8a64;
+  --shadow-sm: 0 1px 2px rgb(17 24 39 / 0.05);
+  --shadow-md: 0 2px 4px rgb(17 24 39 / 0.04), 0 12px 28px -14px rgb(17 24 39 / 0.2);
+  --shadow-lg: 0 8px 40px -12px rgb(47 122 92 / 0.4);
+}
+
+:root[data-theme='legacy'] {
+  color-scheme: light;
+
   --bg: #fbf7f2;
   --bg-glow-a: #ffd9a8;
   --bg-glow-b: #cfe6d8;
@@ -19,55 +50,10 @@
   --on-brand: #ffffff;
   --pos: #0e9f6e;
   --neg: #e0405e;
-  /* Same green as the sign-in tree, so the CTA belongs to the illustration. */
   --leaf: #4f8a64;
   --shadow-sm: 0 1px 2px rgb(28 23 20 / 0.05);
   --shadow-md: 0 2px 4px rgb(28 23 20 / 0.04), 0 12px 28px -14px rgb(28 23 20 / 0.22);
   --shadow-lg: 0 8px 40px -12px rgb(55 112 90 / 0.4);
-}
-
-:root:not([data-theme='light']) {
-  @media (prefers-color-scheme: dark) {
-    --bg: #141220;
-    --bg-glow-a: #4a2d6b;
-    --bg-glow-b: #2d5744;
-    --surface: #1e1b2e;
-    --surface-2: #272338;
-    --ink: #f6f3ff;
-    --ink-2: #cdc5e4;
-    --muted: #9b92b5;
-    --line: #322c46;
-    --brand: #6fb894;
-    --brand-soft: #1f3329;
-    --on-brand: #10231a;
-    --pos: #34d399;
-    --neg: #fb7185;
-    --leaf: #63a97b;
-    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
-    --shadow-md: 0 2px 4px rgb(0 0 0 / 0.2), 0 12px 28px -14px rgb(0 0 0 / 0.6);
-    --shadow-lg: 0 8px 40px -12px rgb(111 184 148 / 0.45);
-  }
-}
-
-:root[data-theme='dark'] {
-  --bg: #141220;
-  --bg-glow-a: #4a2d6b;
-  --bg-glow-b: #2d5744;
-  --surface: #1e1b2e;
-  --surface-2: #272338;
-  --ink: #f6f3ff;
-  --ink-2: #cdc5e4;
-  --muted: #9b92b5;
-  --line: #322c46;
-  --brand: #6fb894;
-  --brand-soft: #1f3329;
-  --on-brand: #10231a;
-  --pos: #34d399;
-  --neg: #fb7185;
-  --leaf: #63a97b;
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
-  --shadow-md: 0 2px 4px rgb(0 0 0 / 0.2), 0 12px 28px -14px rgb(0 0 0 / 0.6);
-  --shadow-lg: 0 8px 40px -12px rgb(111 184 148 / 0.45);
 }
 
 @theme inline {

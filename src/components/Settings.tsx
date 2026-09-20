@@ -10,10 +10,9 @@ import { signOut } from '../lib/googleAuth';
 import { Banner, Button, Field, inputClass } from './UI';
 import { IconDownload, IconExternal, IconLogout } from './Icons';
 
-const THEMES: { id: ThemePref; label: string; emoji: string }[] = [
-  { id: 'system', label: 'Auto', emoji: '🌗' },
-  { id: 'light', label: 'Light', emoji: '☀️' },
-  { id: 'dark', label: 'Dark', emoji: '🌙' },
+const THEMES: { id: ThemePref; label: string; emoji: string; blurb: string }[] = [
+  { id: 'light', label: 'Light', emoji: '☀️', blurb: 'Cool and white' },
+  { id: 'legacy', label: 'Legacy', emoji: '🍦', blurb: 'The original cream' },
 ];
 
 /** Open + download, offered identically for each workbook the app is linked to. */
@@ -72,19 +71,20 @@ export function Settings({
   return (
     <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 pt-4 pb-28">
       <Section title="Appearance">
-        <div className="grid grid-cols-3 gap-2.5">
+        <div className="grid grid-cols-2 gap-2.5">
           {THEMES.map((t) => {
             const on = config.theme === t.id;
             return (
               <button
                 key={t.id}
                 onClick={() => setConfig({ theme: t.id })}
-                className={`press flex flex-col items-center gap-1.5 rounded-2xl border-2 py-4 text-xs font-bold transition ${
+                className={`press flex flex-col items-center gap-1 rounded-2xl border-2 py-4 text-xs font-bold transition ${
                   on ? 'border-brand bg-brandsoft text-brand' : 'border-line text-muted'
                 }`}
               >
                 <span className="text-xl">{t.emoji}</span>
                 {t.label}
+                <span className="text-[0.62rem] font-medium text-muted">{t.blurb}</span>
               </button>
             );
           })}

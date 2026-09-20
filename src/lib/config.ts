@@ -5,7 +5,8 @@ import { useCallback, useSyncExternalStore } from 'react';
  * OAuth client to use, and a currency symbol. No investment data, no access
  * token, no cached rows — those live in the spreadsheet or in memory.
  */
-export type ThemePref = 'system' | 'light' | 'dark';
+/** Two light themes: the current one, and the warm cream it started as. */
+export type ThemePref = 'light' | 'legacy';
 
 export interface AppConfig {
   spreadsheetId: string;
@@ -23,14 +24,16 @@ const defaults: AppConfig = {
   spreadsheetId: import.meta.env.VITE_SPREADSHEET_ID ?? '',
   expensesSpreadsheetId: import.meta.env.VITE_EXPENSES_SPREADSHEET_ID ?? '',
   clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID ?? '',
-  theme: 'system',
+  theme: 'light',
   hiddenTotals: {},
 };
 
 function read(): AppConfig {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? { ...defaults, ...JSON.parse(raw) } : defaults;
+    const stored: AppConfig = raw ? { ...defaults, ...JSON.parse(raw) } : defaults;
+    // 'system' and 'dark' are gone; anything unrecognised lands on the light theme.
+    return { ...stored, theme: stored.theme === 'legacy' ? 'legacy' : 'light' };
   } catch {
     return defaults;
   }
@@ -39,11 +42,8 @@ function read(): AppConfig {
 let current = read();
 const listeners = new Set<() => void>();
 
-/** `system` leaves the attribute off so the CSS media query decides. */
 function applyTheme(theme: ThemePref) {
-  const root = document.documentElement;
-  if (theme === 'system') root.removeAttribute('data-theme');
-  else root.setAttribute('data-theme', theme);
+  document.documentElement.setAttribute('data-theme', theme === 'legacy' ? 'legacy' : 'light');
 }
 applyTheme(current.theme);
 
